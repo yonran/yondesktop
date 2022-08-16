@@ -36,19 +36,29 @@
     pkgs.google-cloud-sdk
     pkgs.sbt
     pkgs.openjdk17
+    pkgs.visualvm
+    pkgs.sbt
     pkgs.jq
     pkgs.gh
     pkgs.ripgrep-all
     pkgs.ocrmypdf
     pkgs.nixfmt
-    pkgs.awscli2
     pkgs.wifi-password
+    pkgs.awscli2
+    # proprietary ssm-session-manager-plugin is needed for
+    # aws aws ssm start-session --region=us-west-2 --target=i-…
+    pkgs.ssm-session-manager-plugin
     # pkgs.myawscli2
     # pkgs.mypackages
     # pkgs.python3.pkgs.jsonschema
     # (pkgs.python3.withPackages (p: [])).env
   ];
-    nixpkgs.overlays = let overlayRemovePyopenssl = pkgs: super: 
+
+  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
+    "ssm-session-manager-plugin"
+  ];
+
+  nixpkgs.overlays = let overlayRemovePyopenssl = self: super:
     let removePyopenssl = debugLocation: pythonpkgs:
       let result = lib.filter
         (pythonpkg: !(pythonpkg != null && lib.hasAttr "pname" pythonpkg && pythonpkg.pname == "pyopenssl"))
@@ -71,34 +81,33 @@
           # “Package ‘python3.10-pyopenssl-22.0.0’ in /nix/store/<hash>-nixpkgs/nixpkgs/pkgs/development/python-modules/pyopenssl/default.nix:73 is marked as broken, refusing to evaluate”
           # https://github.com/NixOS/nixpkgs/issues/174457
           # TODO: use overridePythonAttrs
+          # urllib3 already fixed in https://nixpk.gs/pr-tracker.html?pr=179159
           urllib3 = python-super.urllib3.overridePythonAttrs (origattrs: rec {
             propagatedBuildInputs = removePyopenssl "urllib3 propagatedBuildInputs" origattrs.propagatedBuildInputs;
-          });
-          cryptography = python-super.cryptography.overridePythonAttrs (old: rec {
-            propagatedBuildInputs = old.propagatedBuildInputs ++  [python-self.six];
           });
           twisted = python-super.twisted.overridePythonAttrs (origattrs: {
             checkInputs = removePyopenssl "twisted checkInputs"  origattrs.checkInputs;
           });
-          # jsonschema = python-super.jsonschema.override {twisted = python-self.twisted;};
         };
       };
-      myawscli2 = (pkgs.awscli2.override {
+      myawscli2 = (super.awscli2.override {
         python3 = lib.trace 
           (lib.concatStrings [
             "myawscli2: urllib3="
-            pkgs.python3.pkgs.urllib3
+            self.python3.pkgs.urllib3
             "; dependencies: "
-            (lib.concatStringsSep "," (lib.forEach pkgs.python3.pkgs.urllib3.propagatedBuildInputs (x: x.name)))
+            (lib.concatStringsSep ", " (lib.forEach self.python3.pkgs.urllib3.propagatedBuildInputs (x: x.pname)))
             " "
 
           ])
-          pkgs.python3;
-      }).overridePythonAttrs (old: rec {
-        propagatedBuildInputs = removePyopenssl "awscli2 propagatedBuildInputs" old.propagatedBuildInputs;
-        nativeBuildInputs = removePyopenssl "awscli2 nativeBuildInputs" old.nativeBuildInputs;
-        passthru.mytest = "hi";
-      });
+          self.python3;
+      })
+    #   .overridePythonAttrs (old: rec {
+    #     propagatedBuildInputs = removePyopenssl "awscli2 propagatedBuildInputs" old.propagatedBuildInputs;
+    #     # nativeBuildInputs = removePyopenssl "awscli2 nativeBuildInputs" old.nativeBuildInputs;
+    #     passthru = old.passthru // {mytest = "hi";};
+    #   })
+      ;
 
     }; in
   [
