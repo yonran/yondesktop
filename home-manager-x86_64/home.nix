@@ -1,50 +1,52 @@
+# This is a home-manager config.
+# home.nix is typically located at ~/.config/nixpkgs/home.nix
+# https://nix-community.github.io/home-manager/index.html#ch-usage
+# but with flakes we do
+#   nix build --no-link .#homeConfigurations.yonran.activationPackage
+#   "$(nix path-info .#homeConfigurations.yonran.activationPackage)"/activate
+# or simply:
+#   home-manager switch --flake '.#yonran'
 { config, pkgs, lib, ... }:
 
-# This is the nix-darwin config, which is expected to exist
-# in ~/.nixpkgs/darwin-configuration.nix
-# (I symlinked it to there)
-
-# To install nix-darwin:
-# nix-build https://github.com/LnL7/nix-darwin/archive/master.tar.gz -A installer
-# result/bin/darwin-installer
-
-# To re-apply this config:
-# darwin-rebuild switch
-
-# This is a nix module which is automatically loaded by nix-darwin
-# To evaluate in nix repl: :l <darwin>
-# This is 
-# lib.forEach config.environment.systemPackages (x: x.name)
-
 {
-  environment.variables = {
-    # nix-darwin sets the default to nano
-    EDITOR = "vim";
-  };
-  # List packages installed in system profile. To search by name, run:
-  # https://nixos.org/manual/nixos/stable/index.html#sec-declarative-package-mgmt
-  # $ nix-env -qaP | grep wget
-  environment.systemPackages =
-    [
-      pkgs.vim
-      pkgs.python3
-      pkgs.git
-      pkgs.ripgrep
-      pkgs.fd
-      pkgs.google-cloud-sdk
-      pkgs.sbt
-      pkgs.openjdk17
-      pkgs.jq
-      pkgs.gh
-      pkgs.ripgrep-all
-      pkgs.nixfmt
-      pkgs.awscli2
-      # pkgs.myawscli2
-      # pkgs.mypackages
-      # pkgs.python3.pkgs.jsonschema
-      # (pkgs.python3.withPackages (p: [])).env
-    ];
-  nixpkgs.overlays = let overlayRemovePyopenssl = pkgs: super: 
+  # Home Manager needs a bit of information about you and the
+  # paths it should manage.
+  home.username = "yonran";
+  home.homeDirectory = "/Users/yonran";
+
+  # This value determines the Home Manager release that your
+  # configuration is compatible with. This helps avoid breakage
+  # when a new Home Manager release introduces backwards
+  # incompatible changes.
+  #
+  # You can update Home Manager without changing this value. See
+  # the Home Manager release notes for a list of state version
+  # changes in each release.
+  home.stateVersion = "22.05";
+
+  # Let Home Manager install and manage itself.
+  # programs.home-manager.enable = true;
+
+  home.packages = [
+    pkgs.vim
+    pkgs.python3
+    pkgs.git
+    pkgs.ripgrep
+    pkgs.fd
+    pkgs.google-cloud-sdk
+    pkgs.sbt
+    pkgs.openjdk17
+    pkgs.jq
+    pkgs.gh
+    pkgs.ripgrep-all
+    pkgs.nixfmt
+    pkgs.awscli2
+    # pkgs.myawscli2
+    # pkgs.mypackages
+    # pkgs.python3.pkgs.jsonschema
+    # (pkgs.python3.withPackages (p: [])).env
+  ];
+    nixpkgs.overlays = let overlayRemovePyopenssl = pkgs: super: 
     let removePyopenssl = debugLocation: pythonpkgs:
       let result = lib.filter
         (pythonpkg: !(pythonpkg != null && lib.hasAttr "pname" pythonpkg && pythonpkg.pname == "pyopenssl"))
@@ -110,19 +112,4 @@
     # https://nixos.org/manual/nixos/stable/index.html#sec-customising-packages
   };
 
-  # Use a custom configuration.nix location.
-  # $ darwin-rebuild switch -I darwin-config=$HOME/.config/nixpkgs/darwin/configuration.nix
-  # environment.darwinConfig = "$HOME/.config/nixpkgs/darwin/configuration.nix";
-
-  # Auto upgrade nix package and the daemon service.
-  services.nix-daemon.enable = true;
-  # nix.package = pkgs.nix;
-
-  # Create /etc/bashrc that loads the nix-darwin environment.
-  programs.zsh.enable = true;  # default shell on catalina
-  # programs.fish.enable = true;
-
-  # Used for backwards compatibility, please read the changelog before changing.
-  # $ darwin-rebuild changelog
-  system.stateVersion = 4;
 }
