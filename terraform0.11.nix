@@ -4,6 +4,8 @@
 # even after the nix-shell ends, so make sure to terraform init after rebuilding!
 {
   # tested on nixpkgs f96729212602f15a6a226d2f27f5de70492ad095 at least
+  # but before https://github.com/NixOS/nixpkgs/commit/584db216dba55ec77ffb469f4efc0cb25dc824f0
+  # which removed terraform 0.13
   pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/f96729212602f15a6a226d2f27f5de70492ad095.tar.gz") {}
 }:
 let

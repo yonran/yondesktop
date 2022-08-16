@@ -1,5 +1,9 @@
 # Issues with podman:
-# 1) podman machine start failure “Error: dial unix /var/folders/v8/SHA/T/podman/podman-machine-default_ready.sock: connect: connection refused”; see fix for podman machine start with nix: vim ~/.config/containers/podman/machine/qemu/podman-machine-default.json and set -drive file=… to absolute path
+# 1) podman machine start failure
+# “Error: dial unix /var/folders/v8/SHA/T/podman/podman-machine-default_ready.sock: connect: connection refused”;
+# see fix for podman machine start with nix: vim ~/.config/containers/podman/machine/qemu/podman-machine-default.json
+# and set -drive file=… to absolute path
+# https://github.com/containers/podman/issues/13256
 # 2) podman machine can't run amd64 images (exec error);
 # podman machine ssh
 # sudo rpm-ostree install qemu-user-static --reboot
@@ -32,6 +36,7 @@ in
       pkgs.podman-compose
       dockerCompat
     ];
+    qemu = pkgs.qemu;
     shellHook = ''
       '';
   }
