@@ -39,8 +39,10 @@
     pkgs.jq
     pkgs.gh
     pkgs.ripgrep-all
+    pkgs.ocrmypdf
     pkgs.nixfmt
     pkgs.awscli2
+    pkgs.wifi-password
     # pkgs.myawscli2
     # pkgs.mypackages
     # pkgs.python3.pkgs.jsonschema
@@ -102,6 +104,17 @@
   [
     overlayRemovePyopenssl
   ];
+
+  programs.vscode = {
+    enable = true;
+    package = pkgs.vscodium;
+    extensions = [
+      pkgs.vscode-extensions.bbenoist.nix
+      pkgs.vscode-extensions.eamodio.gitlens
+      pkgs.vscode-extensions.golang.go
+    ];
+  };
+
   # TEMPORARY: allow awscli which does not work otherwise
   # nixpkgs.config.allowBroken = true;
   nixpkgs.config.packageOverrides = {
@@ -112,4 +125,24 @@
     # https://nixos.org/manual/nixos/stable/index.html#sec-customising-packages
   };
 
+  programs.git.userEmail = "yonathan@gmail.com";
+  programs.git.userName = "Yonathan Randolph";
+
+  # MacOS Preferences
+  # defaults read -globalDomain InitialKeyRepeat
+  # Control Panel minimum InitialKeyRepeat is 15; I think 10 is better.
+  targets.darwin.defaults.NSGlobalDomain.InitialKeyRepeat = 10;
+  # Control Panel minimum KeyRepeat is 2
+  targets.darwin.defaults.NSGlobalDomain.KeyRepeat = 2;
+  targets.darwin.defaults.NSGlobalDomain.AppleShowScrollBars = "Always";
+  # defaults read com.apple.AppleMultitouchTrackpad Clicking
+  targets.darwin.defaults.trackpad.Clicking = true;
+  targets.darwin.defaults.trackpad.TrackpadThreeFingerDrag = true;
+  # defaults read com.apple.screencapture disable-shadow
+  targets.darwin.defaults.screencapture.disable-shadow = true;
+  # defaults read com.apple.finder AppleShowAllFiles
+  targets.darwin.defaults.finder.AppleShowAllFiles = true;
+  targets.darwin.defaults.finder.ShowStatusBar = true;
+  targets.darwin.defaults.finder.AppleShowAllExtensions = true;
+  targets.darwin.defaults.dock.orientation = "right";
 }
