@@ -7,16 +7,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1657835815,
-        "narHash": "sha256-CnZszAYpNKydh6N7+xg+eRtWNVoAAGqc6bg+Lpgq1xc=",
-        "owner": "lnl7",
+        "lastModified": 1660683313,
+        "narHash": "sha256-0UlR9yu4mwwKWeks7lMXTnljBehgYvx2ELVbKSM51kU=",
+        "owner": "yonran",
         "repo": "nix-darwin",
-        "rev": "54a24f042f93c79f5679f133faddedec61955cf2",
+        "rev": "2120245fc210af504686da80ea3dfff27ef22b9e",
         "type": "github"
       },
       "original": {
-        "owner": "lnl7",
-        "ref": "master",
+        "owner": "yonran",
+        "ref": "387-no-developer-tools-were-found",
         "repo": "nix-darwin",
         "type": "github"
       }

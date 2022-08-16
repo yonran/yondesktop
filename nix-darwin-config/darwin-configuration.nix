@@ -1,10 +1,13 @@
 { config, pkgs, lib, ... }:
 
 # to apply this flake-based nix-darwin config:
-#   nix --experimental-features 'nix-command flakes' build '.#darwinConfigurations.Yonathans-MacBook-Pro-2.system'
+#   (do this within nix-shell -p git)
+#   nix --experimental-features 'nix-command flakes' build '.#darwinConfigurations.aarch64.system'
 #   # the following step may be needed to bootstrap 
-#   source ./result/sw/bin/darwin-rebuild activate --flake .
-#   ./result/sw/bin/darwin-rebuild switch --flake .
+#   source ./result/sw/bin/darwin-rebuild activate --flake '.#aarch64'
+#   ./result/sw/bin/darwin-rebuild switch --flake '.#aarch64'
+# once built, you can rebuild with
+#   darwin-rebuild switch --flake '.#aarch64'
 # https://github.com/LnL7/nix-darwin/tree/54a24f042f93c79f5679f133faddedec61955cf2#flakes-experimental
 
 # Previous instructions (pre-flakes)
@@ -36,6 +39,7 @@
   environment.systemPackages =
     [
       pkgs.home-manager
+      pkgs.git # needed for nix commands
     ];
 
   # Use a custom configuration.nix location.

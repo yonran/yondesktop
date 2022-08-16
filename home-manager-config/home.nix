@@ -2,10 +2,10 @@
 # home.nix is typically located at ~/.config/nixpkgs/home.nix
 # https://nix-community.github.io/home-manager/index.html#ch-usage
 # but with flakes we do
-#   nix build --no-link .#homeConfigurations.yonran.activationPackage
-#   "$(nix path-info .#homeConfigurations.yonran.activationPackage)"/activate
+#   nix build --no-link .#homeConfigurations.x86_64.activationPackage
+#   "$(nix path-info .#homeConfigurations.x86_64.activationPackage)"/activate
 # or simply:
-#   home-manager switch --flake '.#yonran'
+#   home-manager switch --flake '.#x86_64'
 { config, pkgs, lib, ... }:
 
 {
