@@ -148,12 +148,12 @@ in {
   programs.bash.bashrcExtra = ''
     # https://direnv.net/docs/hook.html
     eval "$(direnv hook bash)"
-  ''
+  '';
   # ~/.zshrc
   programs.zsh.initExtra = ''
     # https://direnv.net/docs/hook.html
     eval "$(direnv hook zsh)"
-  ''
+  '';
 
   launchd.agents.lorri = {
     config = {
