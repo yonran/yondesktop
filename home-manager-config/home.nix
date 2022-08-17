@@ -40,7 +40,6 @@ in {
     pkgs.sbt
     pkgs.openjdk17
     pkgs.visualvm
-    pkgs.sbt
     pkgs.jq
     pkgs.gh
     pkgs.ripgrep-all
@@ -48,6 +47,8 @@ in {
     pkgs.nixfmt
     pkgs.wifi-password
     pkgs.awscli2
+    pkgs.rustc
+    pkgs.cargo
     # proprietary ssm-session-manager-plugin is needed for
     # aws aws ssm start-session --region=us-west-2 --target=i-…
     pkgs.ssm-session-manager-plugin
