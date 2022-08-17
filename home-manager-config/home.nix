@@ -8,7 +8,9 @@
 #   home-manager switch --flake '.#x86_64'
 { config, pkgs, lib, ... }:
 
-{
+let
+  inherit (pkgs) lorri;
+in {
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   home.username = "yonran";
@@ -30,6 +32,7 @@
   home.packages = [
     pkgs.vim
     pkgs.python3
+    pkgs.direnv # for lorri
     pkgs.git
     pkgs.ripgrep
     pkgs.fd
@@ -48,6 +51,7 @@
     # proprietary ssm-session-manager-plugin is needed for
     # aws aws ssm start-session --region=us-west-2 --target=i-…
     pkgs.ssm-session-manager-plugin
+    lorri
     # pkgs.myawscli2
     # pkgs.mypackages
     # pkgs.python3.pkgs.jsonschema
@@ -121,6 +125,7 @@
       pkgs.vscode-extensions.bbenoist.nix
       pkgs.vscode-extensions.eamodio.gitlens
       pkgs.vscode-extensions.golang.go
+      pkgs.vscode-extensions.rust-lang.rust-analyzer
     ];
   };
 
@@ -136,6 +141,30 @@
 
   programs.git.userEmail = "yonathan@gmail.com";
   programs.git.userName = "Yonathan Randolph";
+
+  # direnv and lorri: see
+  # https://nixos.wiki/wiki/Flakes#Direnv_integration
+  # ~/.bashrc
+  programs.bash.bashrcExtra = ''
+    # https://direnv.net/docs/hook.html
+    eval "$(direnv hook bash)"
+  ''
+  # ~/.zshrc
+  programs.zsh.initExtra = ''
+    # https://direnv.net/docs/hook.html
+    eval "$(direnv hook zsh)"
+  ''
+
+  launchd.agents.lorri = {
+    config = {
+      # since lorri does not support on-demand launching on MacOS
+      # using launchd_activate_socket(),
+      # we have to hard-code the paths and KeepAlive always
+      KeepAlive = true;
+      RunAtLoad = true;
+      ProgramArguments = ["${lorri}/bin/lorri" "daemon"];
+    };
+  };
 
   # MacOS Preferences
   # defaults read -globalDomain InitialKeyRepeat
