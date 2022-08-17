@@ -143,6 +143,7 @@ in {
   programs.git.userEmail = "yonathan@gmail.com";
   programs.git.userName = "Yonathan Randolph";
 
+  programs.bash.enable = true;
   # direnv and lorri: see
   # https://nixos.wiki/wiki/Flakes#Direnv_integration
   # ~/.bashrc
@@ -150,13 +151,16 @@ in {
     # https://direnv.net/docs/hook.html
     eval "$(direnv hook bash)"
   '';
+  programs.zsh.enable = true;
   # ~/.zshrc
   programs.zsh.initExtra = ''
     # https://direnv.net/docs/hook.html
     eval "$(direnv hook zsh)"
   '';
 
+  launchd.enable = true;
   launchd.agents.lorri = {
+    enable = true;
     config = {
       # since lorri does not support on-demand launching on MacOS
       # using launchd_activate_socket(),
