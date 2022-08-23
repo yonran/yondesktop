@@ -58,6 +58,15 @@
   # $ darwin-rebuild changelog
   system.stateVersion = 4;
 
+  system.activationScripts.extraActivation.text = ''
+    # https://sixcolors.com/post/2020/11/quick-tip-enable-touch-id-for-sudo/
+    if ! grep pam_tid.so /etc/pam.d/sudo >/dev/null; then
+      sed -i "" '2i\
+auth       sufficient     pam_tid.so
+' /etc/pam.d/sudo
+    fi
+  '';
+
   # see https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/misc/nix-daemon.nix
   # /etc/nix/nix.conf
   nix.package = pkgs.nixUnstable; # required for experimental-features
