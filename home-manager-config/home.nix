@@ -53,6 +53,8 @@ in {
     # aws aws ssm start-session --region=us-west-2 --target=i-…
     pkgs.ssm-session-manager-plugin
     lorri
+    # for getting the sha256 of fetchFromGitHub
+    pkgs.nix-prefetch-github
     # pkgs.myawscli2
     # pkgs.mypackages
     # pkgs.python3.pkgs.jsonschema
