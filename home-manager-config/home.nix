@@ -55,6 +55,7 @@ in {
     lorri
     # for getting the sha256 of fetchFromGitHub
     pkgs.nix-prefetch-github
+    pkgs.nodePackages.node2nix
     # pkgs.myawscli2
     # pkgs.mypackages
     # pkgs.python3.pkgs.jsonschema
