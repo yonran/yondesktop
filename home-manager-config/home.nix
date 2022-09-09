@@ -159,6 +159,11 @@ in {
   programs.zsh.initExtra = ''
     # https://direnv.net/docs/hook.html
     eval "$(direnv hook zsh)"
+
+    # make meta-backspace and meta-arrow move only to hyphen or slash like bash
+    # https://unix.stackexchange.com/a/258661/9342
+    autoload -U select-word-style
+    select-word-style bash
   '';
 
   launchd.enable = true;
