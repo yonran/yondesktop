@@ -60,6 +60,7 @@ in {
     # pkgs.mypackages
     # pkgs.python3.pkgs.jsonschema
     # (pkgs.python3.withPackages (p: [])).env
+    pkgs.sequelpro
   ];
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
@@ -142,6 +143,31 @@ in {
     # to prevent an infinite recursion
     # https://nixos.org/manual/nixos/stable/index.html#sec-customising-packages
   };
+
+  # copy MacOS application symlinks from /nix/ to ~/Applications
+  # e.g. Sequel Pro
+  # https://github.com/nix-community/home-manager/issues/1341#issuecomment-1190875080
+  home.activation = lib.mkIf pkgs.stdenv.isDarwin {
+    copyApplications = let
+      apps = pkgs.buildEnv {
+        name = "home-manager-applications";
+        paths = config.home.packages;
+        pathsToLink = "/Applications";
+      };
+    in lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      baseDir="$HOME/Applications/Home Manager Apps"
+      if [ -d "$baseDir" ]; then
+        rm -rf "$baseDir"
+      fi
+      mkdir -p "$baseDir"
+      for appFile in ${apps}/Applications/*; do
+        target="$baseDir/$(basename "$appFile")"
+        $DRY_RUN_CMD cp ''${VERBOSE_ARG:+-v} -fHRL "$appFile" "$baseDir"
+        $DRY_RUN_CMD chmod ''${VERBOSE_ARG:+-v} -R +w "$target"
+      done
+    '';
+  };
+
 
   programs.git.userEmail = "yonathan@gmail.com";
   programs.git.userName = "Yonathan Randolph";
