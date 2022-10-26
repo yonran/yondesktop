@@ -10,6 +10,7 @@
 
 let
   inherit (pkgs) lorri;
+  sequelace = pkgs.callPackage ./sequelace.nix {};
 in {
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
@@ -61,6 +62,7 @@ in {
     # pkgs.python3.pkgs.jsonschema
     # (pkgs.python3.withPackages (p: [])).env
     pkgs.sequelpro
+    sequelace
   ];
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
