@@ -36,6 +36,7 @@ in {
     pkgs.direnv # for lorri
     pkgs.git
     pkgs.ripgrep
+    # pkgs.ripgrep-all
     pkgs.fd
     pkgs.google-cloud-sdk
     pkgs.sbt
@@ -43,8 +44,7 @@ in {
     pkgs.visualvm
     pkgs.jq
     pkgs.gh
-    pkgs.ripgrep-all
-    pkgs.ocrmypdf
+    # pkgs.ocrmypdf
     pkgs.nixfmt
     pkgs.wifi-password
     pkgs.awscli2

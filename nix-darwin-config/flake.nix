@@ -2,7 +2,7 @@
   description = "Yonathan's darwin system";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-22.05-darwin";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     # use my branch until this PR is merged
     # https://github.com/LnL7/nix-darwin/pull/491
     # darwin.url = "github:lnl7/nix-darwin/master";

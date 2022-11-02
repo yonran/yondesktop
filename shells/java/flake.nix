@@ -2,7 +2,7 @@
 {
   description = "Shells with JDK, maven, sbt";
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-22.05-darwin";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils/master";
   };
 
