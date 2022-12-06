@@ -9,26 +9,34 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let pkgs = nixpkgs.legacyPackages.${system};
-      shellWithJdk = jdk: pkgs.mkShell {
-        buildInputs = [
-          jdk
-          (pkgs.sbt.override {
-            jre = jdk;
-          })
-          (pkgs.maven.override {
-            inherit jdk;
-          })
+      shellWithJdk = jdk: otherpackages: pkgs.mkShell {
+        buildInputs = builtins.concatLists [
+          [
+            jdk
+            (pkgs.sbt.override {
+              jre = jdk;
+            })
+            (pkgs.maven.override {
+              inherit jdk;
+            })
 
-          # keep this line if you use bash
-          pkgs.bashInteractive
-        ];
+            # keep this line if you use bash
+            pkgs.bashInteractive
+
+          ]
+          otherpackages
+        ] ;
       };
       in {
-        devShells.jdk8 = shellWithJdk pkgs.openjdk8;
-        devShells.jdk9 = shellWithJdk pkgs.openjdk9;
-        devShells.jdk11 = shellWithJdk pkgs.openjdk11;
-        devShells.jdk13 = shellWithJdk pkgs.openjdk13;
-        devShells.jdk17 = shellWithJdk pkgs.openjdk17;
+        devShells.jdk8 = shellWithJdk pkgs.openjdk8 [];
+        devShells.jdk9 = shellWithJdk pkgs.openjdk9 [];
+        devShells.jdk11 = shellWithJdk pkgs.openjdk11 [];
+        devShells.jdk13 = shellWithJdk pkgs.openjdk13 [];
+        devShells.jdk17 = shellWithJdk pkgs.openjdk17 [];
+        devShells.jdk17AndMysql = shellWithJdk pkgs.openjdk17 [
+          pkgs.mysql80
+          pkgs.terraform
+        ];
       }
     );
 }
