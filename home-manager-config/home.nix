@@ -193,6 +193,9 @@ in {
     autoload -U select-word-style
     select-word-style bash
   '';
+  programs.zsh.oh-my-zsh.enable = true;
+  programs.zsh.oh-my-zsh.extraConfig = ''
+  '';
 
   launchd.enable = true;
   launchd.agents.lorri = {
