@@ -48,8 +48,9 @@ in {
     pkgs.nixfmt
     pkgs.wifi-password
     pkgs.awscli2
-    pkgs.rustc
-    pkgs.cargo
+    (pkgs.rust-bin.stable.latest.default.override {
+      extensions = [ "rust-src" ];
+    })
     # proprietary ssm-session-manager-plugin is needed for
     # aws aws ssm start-session --region=us-west-2 --target=i-…
     pkgs.ssm-session-manager-plugin
@@ -168,6 +169,13 @@ in {
         $DRY_RUN_CMD chmod ''${VERBOSE_ARG:+-v} -R +w "$target"
       done
     '';
+  };
+
+  home.sessionVariables = {
+    # expose rust-src to fix vscode rust-analyzer error
+    # rust-analyzer failed to load workspace: Failed to find sysroot for Cargo.toml file /Users/yonran/arena/mysql-proxy/Cargo.toml. Is rust-src installed?: can't load standard library from sysroot /nix/store/ml6i1rd72qdc66vnvpadqn3yxrz7isbl-rustc-1.64.0 (discovered via `rustc --print sysroot`) try installing the Rust source the same way you installed rustc
+    # https://discourse.nixos.org/t/rust-src-not-found-and-other-misadventures-of-developing-rust-on-nixos/11570/6
+    # RUST_SRC_PATH="${pkgs.rust-src}/lib/rustlib/src/rust/library/";
   };
 
 

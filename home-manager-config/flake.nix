@@ -10,6 +10,7 @@
   inputs = {
     # Specify the source of Home Manager and Nixpkgs.
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:oxalica/rust-overlay";
     # alternately, specify a branch:
     # nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05"
     home-manager = {
@@ -20,7 +21,7 @@
     };
   };
 
-  outputs = { nixpkgs, home-manager, ... }:
+  outputs = { nixpkgs, home-manager, rust-overlay, ... }:
     let
       makeHomeConfiguration = system:
         home-manager.lib.homeManagerConfiguration {
@@ -30,6 +31,11 @@
           # the pathni to your home.nix.
           modules = [
             ./home.nix
+            # https://github.com/oxalica/rust-overlay
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [ rust-overlay.overlays.default ];
+              # environment.systemPackages = [ pkgs.rust-bin.stable.latest.default ];
+            })
           ];
 
           # Optionally use extraSpecialArgs
