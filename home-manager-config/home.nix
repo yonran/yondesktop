@@ -131,7 +131,9 @@ in {
     package = pkgs.vscodium;
     extensions = [
       pkgs.vscode-extensions.bbenoist.nix
+      pkgs.vscode-extensions.dbaeumer.vscode-eslint
       pkgs.vscode-extensions.eamodio.gitlens
+      pkgs.vscode-extensions.hashicorp.terraform
       pkgs.vscode-extensions.golang.go
       pkgs.vscode-extensions.rust-lang.rust-analyzer
     ];
