@@ -64,6 +64,11 @@ in {
     # (pkgs.python3.withPackages (p: [])).env
     pkgs.sequelpro
     sequelace
+    # temporarily install go globally until vscode-go
+    # handles direnv properly
+    # https://github.com/golang/vscode-go/issues/2617
+    pkgs.go
+    pkgs.gopls
   ];
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
