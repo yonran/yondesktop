@@ -19,6 +19,41 @@ let
     vendorSha256 = "sha256-qFEZ2i6FNTVC2Wy3mFCU/mAkR+XwEgo/hTW1eG5EnUg=";
     version = "3.45.0";
   };
+  google3_30_0 = pkgs.terraform-providers.mkProvider {
+    # in terraform-providers/default.nix, goPackagePath = "github.com/${data.owner}/${data.repo}"
+    owner = "hashicorp";
+    provider-source-address = "registry.terraform.io/-/google";
+    repo = "terraform-provider-google";
+    rev = "v3.30.0";
+    sha256 = "sha256-B3eicR6QmmMJJSZ4wid1FCd7oWtEmsb03cBTswjQKws=";
+    # pkgs.lib.fakeSha256
+    vendorSha256 = "sha256-lyJqlrKQDy+wRk6prA1Nb8CbcIBwfE9Dd6oWQfVopKM=";
+    version = "3.30.0";
+  };
+  google3_30_0_hashicorp = pkgs.terraform-providers.mkProvider {
+    # in terraform-providers/default.nix, goPackagePath = "github.com/${data.owner}/${data.repo}"
+    owner = "hashicorp";
+    provider-source-address = "registry.terraform.io/hashicorp/google";
+    repo = "terraform-provider-google";
+    rev = "v3.30.0";
+    sha256 = "sha256-B3eicR6QmmMJJSZ4wid1FCd7oWtEmsb03cBTswjQKws=";
+    # pkgs.lib.fakeSha256
+    vendorSha256 = "sha256-lyJqlrKQDy+wRk6prA1Nb8CbcIBwfE9Dd6oWQfVopKM=";
+    version = "3.30.0";
+  };
+  google4_45_0 = pkgs.terraform-providers.mkProvider {
+    # in terraform-providers/default.nix, goPackagePath = "github.com/${data.owner}/${data.repo}"
+    owner = "hashicorp";
+    provider-source-address = "registry.terraform.io/hashicorp/google";
+    repo = "terraform-provider-google";
+    rev = "v4.45.0";
+    sha256 = "sha256-VqQK6NifhilmnJL5L4EHmmeFWZPBmQhoUl3mz8igSck=z";
+    # pkgs.lib.fakeSha256
+    vendorSha256 = pkgs.lib.fakeSha256;
+    version = "4.45.0";
+    # fix error: cannot find module providing package github.com/hashicorp/terraform-provider-clean-google/google
+    # subPackages = ["."];
+  };
   consul = pkgs.terraform-providers.mkProvider {
     owner = "terraform-providers";
     provider-source-address = "registry.terraform.io/hashicorp/consul";
@@ -53,6 +88,9 @@ let
     # p.template archived
     rundeck
     grafana
+    google3_30_0
+    google3_30_0_hashicorp
+    # google4_45_0
     p.null
   ]);
   shell = pkgs.mkShell {
