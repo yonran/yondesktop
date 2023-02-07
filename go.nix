@@ -6,6 +6,7 @@ in
     buildInputs = [
       pkgs.bashInteractive
       pkgs.go
+      pkgs.gopls
       pkgs.pkg-config
     ];
   shellHook = ''
