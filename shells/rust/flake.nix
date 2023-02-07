@@ -4,7 +4,7 @@
   description = "Shells with cargo, rustc, rust-src";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils/master";
+    flake-utils.url = "github:numtide/flake-utils/main";
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
