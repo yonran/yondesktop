@@ -154,30 +154,6 @@ in {
     # https://nixos.org/manual/nixos/stable/index.html#sec-customising-packages
   };
 
-  # copy MacOS application symlinks from /nix/ to ~/Applications
-  # e.g. Sequel Pro
-  # https://github.com/nix-community/home-manager/issues/1341#issuecomment-1190875080
-  home.activation = lib.mkIf pkgs.stdenv.isDarwin {
-    copyApplications = let
-      apps = pkgs.buildEnv {
-        name = "home-manager-applications";
-        paths = config.home.packages;
-        pathsToLink = "/Applications";
-      };
-    in lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      baseDir="$HOME/Applications/Home Manager Apps"
-      if [ -d "$baseDir" ]; then
-        rm -rf "$baseDir"
-      fi
-      mkdir -p "$baseDir"
-      for appFile in ${apps}/Applications/*; do
-        target="$baseDir/$(basename "$appFile")"
-        $DRY_RUN_CMD cp ''${VERBOSE_ARG:+-v} -fHRL "$appFile" "$baseDir"
-        $DRY_RUN_CMD chmod ''${VERBOSE_ARG:+-v} -R +w "$target"
-      done
-    '';
-  };
-
   home.sessionVariables = {
     # expose rust-src to fix vscode rust-analyzer error
     # rust-analyzer failed to load workspace: Failed to find sysroot for Cargo.toml file /Users/yonran/arena/mysql-proxy/Cargo.toml. Is rust-src installed?: can't load standard library from sysroot /nix/store/ml6i1rd72qdc66vnvpadqn3yxrz7isbl-rustc-1.64.0 (discovered via `rustc --print sysroot`) try installing the Rust source the same way you installed rustc
