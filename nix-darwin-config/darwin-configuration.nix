@@ -2,12 +2,12 @@
 
 # to apply this flake-based nix-darwin config:
 #   (do this within nix-shell -p git)
-#   nix --experimental-features 'nix-command flakes' build '.#darwinConfigurations.aarch64.system'
+#   nix --experimental-features 'nix-command flakes' build '.#darwinConfigurations.aarch64-darwin.default.system'
 #   # the following step may be needed to bootstrap 
-#   source ./result/sw/bin/darwin-rebuild activate --flake '.#aarch64'
-#   ./result/sw/bin/darwin-rebuild switch --flake '.#aarch64'
+#   source ./result/sw/bin/darwin-rebuild activate --flake '.#aarch64-darwin.default'
+#   ./result/sw/bin/darwin-rebuild switch --flake '.#aarch64-darwin.default'
 # once built, you can rebuild with
-#   darwin-rebuild switch --flake '.#aarch64'
+#   darwin-rebuild switch --flake .#aarch64-darwin.default
 # https://github.com/LnL7/nix-darwin/tree/54a24f042f93c79f5679f133faddedec61955cf2#flakes-experimental
 
 # Previous instructions (pre-flakes)
@@ -72,6 +72,12 @@ auth       sufficient     pam_tid.so
   nix.package = pkgs.nixUnstable; # required for experimental-features
   nix.extraOptions = ''
     # enable flakes
-    experimental-features = nix-command flakes
+    # enable content-addressed derivations https://nixos.wiki/wiki/Ca-derivations
+    experimental-features = nix-command flakes ca-derivations
   '';
+  # 2023-02: disable all the options that create system defaults
+  # since they seem to create error until you log out and log back in
+  # shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+  system.defaults.ActivityMonitor.ShowCategory = null;
+  system.defaults.ActivityMonitor.OpenMainWindow = null;
 }

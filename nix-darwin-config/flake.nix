@@ -3,25 +3,20 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    # use my branch until this PR is merged
-    # https://github.com/LnL7/nix-darwin/pull/491
-    # darwin.url = "github:lnl7/nix-darwin/master";
-    darwin.url = "github:yonran/nix-darwin/387-no-developer-tools-were-found";
+    darwin.url = "github:lnl7/nix-darwin/master";
+    # testing
+    # darwin.url = "/Users/yonran/third-party/nix/nix-darwin";
     darwin.inputs.nixpkgs.follows = "nixpkgs";
+    flake-utils.url = "github:numtide/flake-utils/main";
   };
 
-  outputs = { self, darwin, nixpkgs }: {
-    # name the configurations x86_64 and aarch64
-    # instead of the host name.
-    # this means you have to darwin-rebuild switch --flake '.#aarch64'
-    # instead of darwin-rebuild switch --flake .
-    darwinConfigurations.x86_64 = darwin.lib.darwinSystem {
-      system = "x86_64-darwin";
-      modules = [ ./darwin-configuration.nix ];
-    };
-    darwinConfigurations.aarch64 = darwin.lib.darwinSystem {
-      system = "aarch64-darwin";
-      modules = [ ./darwin-configuration.nix ];
-    };
-  };
+  outputs = { self, darwin, nixpkgs, flake-utils }: flake-utils.lib.eachDefaultSystem (system:
+    let pkgs = nixpkgs.legacyPackages.${system};
+    in {
+      darwinConfigurations.default = darwin.lib.darwinSystem {
+        inherit system;
+        modules = [ ./darwin-configuration.nix ];
+      };
+    }
+  );
 }
