@@ -162,8 +162,15 @@ in {
   };
 
 
+  programs.git.enable = true;
+  # configure ~/.config/git/config
   programs.git.userEmail = "yonathan@gmail.com";
   programs.git.userName = "Yonathan Randolph";
+  programs.git.ignores = [
+    # direnv layout dir used for isolated GOPATH, python venv, nix flake
+    # https://github.com/direnv/direnv/blob/v2.32.2/stdlib.sh#L113-L122
+    ".direnv/"
+  ];
 
   programs.bash.enable = true;
   # direnv and lorri: see
