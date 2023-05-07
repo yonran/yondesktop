@@ -31,7 +31,7 @@ in {
   # programs.home-manager.enable = true;
 
   home.packages = [
-    pkgs.vim
+    pkgs.atuin # bash history
     pkgs.python3
     pkgs.direnv # for lorri
     pkgs.git
@@ -183,6 +183,9 @@ in {
   programs.zsh.enable = true;
   # ~/.zshrc
   programs.zsh.initExtra = ''
+    # https://github.com/ellie/atuin#zsh
+    eval "$(atuin init zsh)"
+
     # https://direnv.net/docs/hook.html
     eval "$(direnv hook zsh)"
 
