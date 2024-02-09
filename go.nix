@@ -8,6 +8,7 @@ in
       pkgs.go
       pkgs.gopls
       pkgs.pkg-config
+      pkgs.go2nix
     ];
   shellHook = ''
       '';
