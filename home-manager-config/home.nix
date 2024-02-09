@@ -131,6 +131,17 @@ in {
     overlayRemovePyopenssl
   ];
 
+  programs.vim = {
+    enable = true;
+    plugins = with pkgs.vimPlugins; [ ];
+    #settings = { ignorecase = true; };
+    extraConfig = ''
+      " set mouse=a
+      " https://stackoverflow.com/a/57918829/471341
+      " set clipboard=unnamed
+    '';
+  };
+
   programs.vscode = {
     enable = true;
     package = pkgs.vscodium;
