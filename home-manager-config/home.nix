@@ -175,13 +175,28 @@ in {
 
   programs.git.enable = true;
   # configure ~/.config/git/config
+  # (does not touch ~/.gitconfig, which is read later and can override these values)
   programs.git.userEmail = "yonathan@gmail.com";
   programs.git.userName = "Yonathan Randolph";
   programs.git.ignores = [
     # direnv layout dir used for isolated GOPATH, python venv, nix flake
     # https://github.com/direnv/direnv/blob/v2.32.2/stdlib.sh#L113-L122
     ".direnv/"
+    ".vscode/"
+    ".terrafirma/"
+    ".pytype/"
+    ".metals/" # scala IDE files
+    ".DS_Store"
+
+    # most of the time I don't want to check in nix files
+    ".envrc"
+    "shell.nix"
   ];
+  programs.git.extraConfig = {
+    rebase = {
+      autosquash = true;
+    };
+  };
 
   programs.bash.enable = true;
   # direnv and lorri: see
