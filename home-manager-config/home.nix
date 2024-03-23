@@ -32,7 +32,7 @@ in {
 
   home.packages = [
     pkgs.atuin # bash history
-    pkgs.python3
+    # pkgs.python3
     pkgs.direnv # for lorri
     pkgs.git
     pkgs.ripgrep
@@ -128,6 +128,10 @@ in {
     ".direnv/"
     ".vscode/"
     ".terrafirma/"
+    ".terraform/"
+    "terraform.tfstate.*.backup"
+    "terraform.tfstate"
+    "terraform.tfstate.d/"
     ".pytype/"
     ".metals/" # scala IDE files
     ".DS_Store"
