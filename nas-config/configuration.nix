@@ -26,6 +26,56 @@
   # when you zfs import a zpool to another computer without exporting it first.
   networking.hostId = "2220fa03";
   networking.firewall = {
+    # enable wireguard https://nixos.wiki/wiki/WireGuard
+    allowedUDPPorts = [ 51820 ];
+  };
+
+  # enable wireguard https://nixos.wiki/wiki/WireGuard
+  networking.wireguard.interfaces = {
+    # "wg0" is the network interface name. You can name the interface arbitrarily.
+    wg0 = {
+      # Determines the IP address and subnet of the server's end of the tunnel interface.
+      ips = [ "192.168.29.3/24" ];
+
+      # The port that WireGuard listens to. Must be accessible by the client.
+      listenPort = 51820;
+
+      # This allows the wireguard server to route your traffic to the internet and hence be like a VPN
+      # For this to work you have to set the dnsserver IP of your router (or dnsserver of choice) in your clients
+      # postSetup = ''
+      #   ${pkgs.iptables}/bin/iptables -t nat -A POSTROUTING -s 10.100.0.0/24 -o eth0 -j MASQUERADE
+      # '';
+
+      # This undoes the above command
+      # postShutdown = ''
+      #   ${pkgs.iptables}/bin/iptables -t nat -D POSTROUTING -s 10.100.0.0/24 -o eth0 -j MASQUERADE
+      # '';
+
+      # Path to the private key file.
+      #
+      # Note: The private key can also be included inline via the privateKey option,
+      # but this makes the private key world-readable; thus, using privateKeyFile is
+      # recommended.
+      privateKeyFile = "/private/wireguard_key";
+      generatePrivateKeyFile = true;
+
+      peers = [
+        # List of allowed peers.
+        {
+          # 2023 work laptop WireGuard.app
+          publicKey = "8fv8YGguu/6DUAD/FHNDZJYF1UfphJAJGfbreDS8S0I=";
+          # List of IPs assigned to this peer within the tunnel subnet. Used to configure routing.
+          allowedIPs = [ "192.168.29.4/32" ];
+        }
+        { # pixel 6 android
+          publicKey = "4boY8Zz2DokrHk85BhuUhfIgFIeanUp8HCY9hlyG6nw=";
+          # List of IPs assigned to this peer within the tunnel subnet. Used to configure routing.
+          allowedIPs = [ "192.168.29.5/32" ];
+        }
+      ];
+    };
+  };
+
   # Use the systemd-boot EFI boot loader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
