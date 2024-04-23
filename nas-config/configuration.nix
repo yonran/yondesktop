@@ -28,6 +28,8 @@
   networking.firewall = {
     # enable wireguard https://nixos.wiki/wiki/WireGuard
     allowedUDPPorts = [ 51820 ];
+    # enable iperf
+    allowedTCPPorts = [ 5201 ];
   };
 
   # enable wireguard https://nixos.wiki/wiki/WireGuard
@@ -146,6 +148,11 @@
     packages = with pkgs; [
       # firefox
       # tree
+      git
+      iotop
+      dstat
+      smartmontools
+      iperf
     ];
     openssh.authorizedKeys.keys = [
       # 2023 work laptop
