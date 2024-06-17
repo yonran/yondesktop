@@ -216,6 +216,48 @@
 
   virtualisation.docker.enable = true;
 
+  # spin down spinning disks
+  # https://www.reddit.com/r/NixOS/comments/751i5t/how_to_specify_that_hard_disks_should_spin_down/
+  powerManagement.powerUpCommands = with pkgs; ''
+    #TODO fix the quoting
+    # ${bash}/bin/bash -c '${hdparm}/bin/hdparm -S 9 -B 127 $(${utillinux}/bin/lsblk -dnp -o name,rota |${gnugrep}/bin/grep \'.*\\s1\'|${coreutils}/bin/cut -d \' \' -f 1)'
+  '';
+  # services.udev.packages = [
+  #   (pkgs.writeTextFile {
+  #     name = "10-hdparm-sleep-disks.rules";
+  #     destination = "/etc/udev/rules.d/10-hdparm-sleep-disks.rules";
+  #     text = ''
+  #       ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="<vendor>", ATTRS{idProduct}=="<product>" RUN+=""
+  #     '';
+  #   })
+  # ];
+  # extra udev rules which will be put in /etc/udev/rules.d/99-local.rules
+  # for syntax see https://www.freedesktop.org/software/systemd/man/latest/udev.html
+  # to list attributes of a device run sudo udevadm info -q all --attribute-walk /dev/sdd
+  # To debug: sudo udevadm test -a add $(udevadm info -q path -n /dev/sda)
+  services.udev.extraRules = ''
+    # to debug these events: journalctl -eu systemd-udevd.service
+    SUBSYSTEM=="block", ATTR{partition}!="1", OPTIONS="log_level=debug"
+    # ATTR{partition}!="1": exclude partitions (e.g. sudo udevadm info -q all --attribute-walk /dev/sdd1)
+    # ATTR{queue/rotational}=="1": match hard drives, exclude SSDs
+    # TAG+="systemd": “systemd will dynamically create device units for all kernel devices that are marked with the "systemd" udev tag”
+    #   https://www.freedesktop.org/software/systemd/man/latest/systemd.device.html
+    # ENV{SYSTEMD_WANTS}+="hdparm-set@.service"
+    #   specify unit names that will be started
+    #   empty @ means that “it will be automatically instantiated by the device's "sysfs" path”
+    #   https://www.freedesktop.org/software/systemd/man/latest/systemd.device.html
+    # Note: you could have used "hdparm-set@%k.service", and then specify /dev/%I in the template file,
+    # but SYSTEMD_WANTS supports this alternate method
+    ACTION=="add", SUBSYSTEM=="block", ATTR{partition}!="1", TAG+="hdparmset", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hdparm-set@%k.service"
+  '';
+  systemd.services."hdparm-set@" = {
+    description = "Set hdparm -S 10 on newly added disks %I";
+    serviceConfig.Type = "oneshot";
+    serviceConfig.ExecStart = "${pkgs.hdparm}/bin/hdparm -S 10 /dev/%I";
+  };
+
+
+
   # Copy the NixOS configuration file and link it from the resulting system
   # (/run/current-system/configuration.nix). This is useful in case you
   # accidentally delete configuration.nix.
