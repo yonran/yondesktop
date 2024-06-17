@@ -15,7 +15,16 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ./zfs-backup-module.nix
     ];
+  # enable zfs-backup-module
+  services.zfsBackup = {
+    enable = true;
+    source_pool = "firstpool";
+    source_fs = "family";
+    backup_pool = "backuppool";
+    backup_fs = "family_backup";
+  };
 
   boot.supportedFilesystems = [ "zfs" ];
   # ZFS is not needed during early boot and this flag is recommended to be off
