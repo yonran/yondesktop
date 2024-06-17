@@ -1,5 +1,6 @@
 # to apply this flake-based home-manager config:
 #   home-manager switch --flake '<flake-uri>#x86_64'
+#   e.g. home-manager switch --flake ~/Documents/nixdesktop/home-manager-config#aarch64
 # or
 #   nix build --no-link <flake-uri>#homeConfigurations.x86_64.activationPackage
 #   "$(nix path-info <flake-uri>#homeConfigurations.x86_64.activationPackage)"/activate
