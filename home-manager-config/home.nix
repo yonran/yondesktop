@@ -144,6 +144,11 @@ in {
     rebase = {
       autosquash = true;
     };
+    # rewrite git urls to always use https;
+    # save the GitHub credentials once in
+    # git-credential-osxkeychain instead of having
+    # another set of credentials in ~/.ssh
+    url."https://github.com/".insteadOf = "ssh://git@github.com/";
   };
 
   programs.bash.enable = true;
