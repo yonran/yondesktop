@@ -149,6 +149,9 @@ in {
     # git-credential-osxkeychain instead of having
     # another set of credentials in ~/.ssh
     url."https://github.com/".insteadOf = "ssh://git@github.com/";
+    # set up credential helper to use gh; equivalent to gh auth setup-git:
+    credential."https://github.com".helper = "!${pkgs.gh}/bin/gh auth git-credential";
+    credential."https://gist.github.com ".helper = "!${pkgs.gh}/bin/gh auth git-credential";
   };
 
   programs.bash.enable = true;
