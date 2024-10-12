@@ -18,6 +18,7 @@
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
       ./zfs-backup-module.nix
+      ./home-monitoring.nix
     ];
   # enable zfs-backup-module
   services.zfsBackup = {
@@ -26,6 +27,10 @@
     source_fs = "family";
     backup_pool = "backuppool";
     backup_fs = "family_backup";
+  };
+  # enable home-monitoring
+  services.home-monitoring = {
+    enable = true;
   };
 
   boot.supportedFilesystems = [ "zfs" ];
