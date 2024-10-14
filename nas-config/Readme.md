@@ -84,3 +84,12 @@ so that broadcom_sta module can load
   rsync --rsync-path="sudo rsync" configuration.nix yonran@yonnas.local:/etc/nixos/configuration.nix &&
   ssh yonran@yonnas.local -- sudo nixos-rebuild switch
   ```
+
+## Configure sb-exporter
+
+To configure the monitoring of the cable sb-exporter modem monitor,
+add a systemd EnvironmentFile to /etc/sb-exporter.env:
+
+```
+MODEM_PASSWORD=password
+```

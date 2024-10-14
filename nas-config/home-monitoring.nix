@@ -1,6 +1,9 @@
 { config, lib, pkgs, ... }:
 
 {
+  imports = [
+    ./sb-exporter-service.nix
+  ];
   options = {
     services.home-monitoring = {
       enable = lib.mkEnableOption "grafana and prometheus for cable modem monitoring";
@@ -38,6 +41,7 @@
             targets = [
               "google.com"
               "192.168.1.1"  # Assumes this is your router's IP. Adjust if different.
+              "192.168.100.1"  # cable modem
             ];
           }];
           relabel_configs = [{
@@ -51,6 +55,13 @@
           {
             target_label = "__address__";
             replacement = "localhost:9115";  # Blackbox exporter.
+          }];
+        }
+        {
+          job_name = "sb-exporter";
+          metrics_path = "/";
+          static_configs = [{
+            targets = [ "localhost:${toString config.services.sb-exporter.metricsPort}" ];
           }];
         }
       ];
@@ -68,6 +79,8 @@
               preferred_ip_protocol: ip4
       '';
     };
+    services.sb-exporter.enable = true;
+    services.sb-exporter.secretFile = "/etc/sb-exporter.env";
 
     # Enable Grafana
     # services.grafana = {
@@ -91,6 +104,7 @@
       config.services.prometheus.port
       config.services.prometheus.exporters.node.port
       9115  # Blackbox exporter
+      config.services.sb-exporter.metricsPort
     ];
   };
 }
