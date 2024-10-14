@@ -83,24 +83,19 @@
     services.sb-exporter.secretFile = "/etc/sb-exporter.env";
 
     # Enable Grafana
-    # services.grafana = {
-    #   enable = true;
-    #   port = 3000;
-    #   addr = "0.0.0.0";
-    #   provision = {
-    #     enable = true;
-    #     datasources = [{
-    #       name = "Prometheus";
-    #       type = "prometheus";
-    #       access = "proxy";
-    #       url = "http://localhost:${toString config.services.prometheus.port}";
-    #     }];
-    #   };
-    # };
+    services.grafana = {
+      enable = true;
+      settings = {
+        server = {
+          http_addr = "0.0.0.0";
+          http_port = 3000;
+        };
+      };
+    };
 
     # Open necessary ports in the firewall
     networking.firewall.allowedTCPPorts = [
-      # config.services.grafana.port
+      config.services.grafana.settings.server.http_port
       config.services.prometheus.port
       config.services.prometheus.exporters.node.port
       9115  # Blackbox exporter
