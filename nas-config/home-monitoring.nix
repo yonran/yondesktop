@@ -42,6 +42,9 @@
               "google.com"
               "192.168.1.1"  # Assumes this is your router's IP. Adjust if different.
               "192.168.100.1"  # cable modem
+              # see Netgear R6400v2 -> Advanced tab -> ADVANCED Home -> Internet Port
+              "75.75.75.75"  # Comcast DNS
+              "75.75.76.76"  # Comcast DNS
             ];
           }];
           relabel_configs = [{
