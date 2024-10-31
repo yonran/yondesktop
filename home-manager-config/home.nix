@@ -48,9 +48,9 @@ in {
     pkgs.nixfmt
     pkgs.wifi-password
     pkgs.awscli2
-    (pkgs.rust-bin.stable.latest.default.override {
+    (pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
       extensions = [ "rust-src" ];
-    })
+    }))
     # proprietary ssm-session-manager-plugin is needed for
     # aws aws ssm start-session --region=us-west-2 --target=i-…
     pkgs.ssm-session-manager-plugin
