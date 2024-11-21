@@ -209,6 +209,7 @@
     extraGroups = [
       "wheel" # Enable ‘sudo’ for the user.
       "docker"
+      "cdrom" # enable dvd drive
     ];
     packages = with pkgs; [
       # firefox
