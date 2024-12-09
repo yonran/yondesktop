@@ -33,6 +33,27 @@
   services.home-monitoring = {
     enable = true;
   };
+  # enable mqtt server (needed for owntracks-recorder)
+  services.mosquitto = {
+    enable = true;
+    listeners = [
+      {
+        port = 1883;
+        address = "localhost";  # This enables both ::1 and 127.0.0.1
+        settings = {
+          allow_anonymous = true;
+        };
+      }
+      {
+        port = 1883;
+        address = "192.168.29.3"; # wireguard
+        settings = {
+          allow_anonymous = true;
+        };
+      }
+    ];
+  };
+
 
   boot.supportedFilesystems = [ "zfs" ];
   # ZFS is not needed during early boot and this flag is recommended to be off
@@ -47,6 +68,12 @@
     allowedUDPPorts = [ 51820 ];
     # enable iperf
     allowedTCPPorts = [ 5201 ];
+  };
+  networking.firewall.interfaces.wg0 = {
+    allowedTCPPorts = [
+      1883 # mosquitto mqtt
+      8083 # owntracks-recorder ot-recorder
+    ];
   };
 
   # enable wireguard https://nixos.wiki/wiki/WireGuard
@@ -210,6 +237,7 @@
       "wheel" # Enable ‘sudo’ for the user.
       "docker"
       "cdrom" # enable dvd drive
+      "owntracks-recorder" # read owntracks-recorder database
     ];
     packages = with pkgs; [
       # firefox
@@ -311,7 +339,7 @@
     serviceConfig.ExecStart = "${pkgs.hdparm}/bin/hdparm -S 10 /dev/%I";
   };
 
-  # services.owntracks-recorder.enable = true;
+  services.owntracks-recorder.enable = true;
 
 
   # Copy the NixOS configuration file and link it from the resulting system

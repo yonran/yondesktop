@@ -93,3 +93,23 @@ add a systemd EnvironmentFile to /etc/sb-exporter.env:
 ```
 MODEM_PASSWORD=password
 ```
+
+## Configure owntracks-recorder
+
+To configure owntracks-recorder, we need to create
+`/etc/default/ot-recorder`
+
+```
+OTR_STORAGEDIR="/firstpool/family/owntracks/recorder/store
+
+# https://opencagedata.com/dashboard account with username yonathan@gmail.com
+OTR_GEOKEY="opencage:xxxxxxxxxxxxx"
+```
+
+And create the data directories:
+
+```
+mkdir -p /firstpool/family/owntracks/recorder/store
+chmod o+x /firstpool/family
+sudo chgrp -R owntracks-recorder /firstpool/family/owntracks
+```
