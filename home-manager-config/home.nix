@@ -193,6 +193,49 @@ in {
     };
   };
 
+
+  # Create Grafana configuration directory and file
+  xdg.configFile."grafana/grafana.ini".text = ''
+    [server]
+    http_port = 3000
+    http_addr = ::1
+
+    # [security]
+    # admin_user = admin
+    # admin_password = $ADMIN_PASSWORD
+
+    [paths]
+    data = ${config.xdg.dataHome}/grafana/data
+    logs = ${config.xdg.dataHome}/grafana/logs
+    plugins = ${config.xdg.dataHome}/grafana/plugins
+  '';
+
+  # LaunchAgent for macOS startup
+  launchd.agents.grafana = {
+    enable = true;
+    config = {
+      ProgramArguments = [
+        "${pkgs.grafana}/bin/grafana"
+        "server"
+        "-homepath" "${pkgs.grafana}/share/grafana"
+        "-config" "${config.xdg.configHome}/grafana/grafana.ini"
+      ];
+      EnvironmentVariables = {
+        AWS_SDK_LOAD_CONFIG= "1"; # load ~/.aws/config
+        AWS_PROFILE = "say";
+      };
+      KeepAlive = true;
+      RunAtLoad = true;
+      # avoid warning
+      # “Background Items Added” “"grafana" is an item that can run in the background. You can manage this in Login Items Settings.”
+      ProcessType = "Background";
+
+      StandardOutPath = "${config.xdg.dataHome}/grafana/logs/stdout.log";
+      StandardErrorPath = "${config.xdg.dataHome}/grafana/logs/stderr.log";
+    };
+  };
+
+
   # MacOS Preferences
   # defaults read -globalDomain InitialKeyRepeat
   # Control Panel minimum InitialKeyRepeat is 15; I think 10 is better.
