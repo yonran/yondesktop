@@ -135,6 +135,7 @@
     # `nixos-generate-config` discovered config.boot.kernelPackages.broadcom_sta,
     # but it is not free so `nix-rebuild` fails until we add this allowUnfree.
     "broadcom-sta"
+    "plexmediaserver"
   ];
   # Pick only one of the below networking options.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
@@ -298,6 +299,15 @@
   services.logind.lidSwitchExternalPower = "ignore";
 
   virtualisation.docker.enable = true;
+
+  # plex at http://192.168.29.3:32400/web
+  services.plex = {
+    enable = true;
+    dataDir = "/firstpool/family/plex";
+    openFirewall = true;
+    # requires sudo chown yonran -R /var/lib/plex https://nixos.wiki/wiki/Plex
+    # user = "yonran";
+  };
 
   # spin down spinning disks
   # https://www.reddit.com/r/NixOS/comments/751i5t/how_to_specify_that_hard_disks_should_spin_down/
