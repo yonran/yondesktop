@@ -20,7 +20,8 @@ in {
     systemd.services.owntracks-recorder = {
       description = "owntracks-recorder Service";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
+      dependsOn = [ "mosquitto.service" ];
+      after = [ "network.target", "mosquitto.service" ];
       serviceConfig = {
         ExecStart = "${owntracks-recorder-package}/bin/ot-recorder owntracks/#  ";
         User = "owntracks-recorder";
