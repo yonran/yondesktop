@@ -175,9 +175,8 @@
   # enable samba and samba-wsdd https://nixos.wiki/wiki/Samba
   services.samba = {
     enable = true;
-    securityType = "user";
     openFirewall = true;
-    shares = {
+    settings = {
       global = {
         "workgroup" = "WORKGROUP";
         "server string" = "smbnix";
