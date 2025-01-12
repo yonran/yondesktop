@@ -118,6 +118,11 @@
           # List of IPs assigned to this peer within the tunnel subnet. Used to configure routing.
           allowedIPs = [ "192.168.29.5/32" ];
         }
+        { # N iPhone
+          publicKey = "O703HWP3+ZYx4Imhv4Nfbqg6Y8DJ8/JNOISmMPYDMDo=";
+          # List of IPs assigned to this peer within the tunnel subnet. Used to configure routing.
+          allowedIPs = [ "192.168.29.6/32" ];
+        }
       ];
     };
   };
