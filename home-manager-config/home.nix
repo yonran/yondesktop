@@ -57,12 +57,10 @@ in {
     lorri
     # for getting the sha256 of fetchFromGitHub
     pkgs.nix-prefetch-github
-    pkgs.nodePackages.node2nix
     # pkgs.myawscli2
     # pkgs.mypackages
     # pkgs.python3.pkgs.jsonschema
     # (pkgs.python3.withPackages (p: [])).env
-    pkgs.sequelpro
     sequelace
     # temporarily install go globally until vscode-go
     # handles direnv properly
@@ -86,18 +84,6 @@ in {
     '';
   };
 
-  programs.vscode = {
-    enable = true;
-    package = pkgs.vscodium;
-    extensions = [
-      pkgs.vscode-extensions.bbenoist.nix
-      pkgs.vscode-extensions.dbaeumer.vscode-eslint
-      pkgs.vscode-extensions.eamodio.gitlens
-      pkgs.vscode-extensions.hashicorp.terraform
-      pkgs.vscode-extensions.golang.go
-      pkgs.vscode-extensions.rust-lang.rust-analyzer
-    ];
-  };
 
   # TEMPORARY: allow awscli which does not work otherwise
   # nixpkgs.config.allowBroken = true;
