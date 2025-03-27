@@ -2,12 +2,14 @@
 
 stdenv.mkDerivation {
   pname = "sequel-ace";
-  version = "4.0.1";
+  version = "5.0.3";
 
   src = fetchurl {
-    url = "https://github.com/Sequel-Ace/Sequel-Ace/releases/download/production%2F4.0.1-20039/Sequel-Ace-4.0.1.zip";
-    sha256 = "1gfgifzgi8i48i3ydqqsf5mrz4dph3frhlsmn00vyngbq8wkc3jm";
+    url = "https://github.com/Sequel-Ace/Sequel-Ace/releases/download/production%2F5.0.3-20089/Sequel-Ace-5.0.3.zip";
+    hash = "sha256-XaAlAjPBJHph32bi7wWbxom/NJccONtxy5jTqz44FTA=";
   };
+  # ignore __MACOSX dir in the zip file
+  sourceRoot = "Sequel Ace.app";
 
   buildInputs = [ undmg unzip ];
   installPhase = ''
