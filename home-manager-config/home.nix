@@ -44,6 +44,7 @@ in {
     pkgs.visualvm
     pkgs.jq
     pkgs.gh
+    pkgs.nodejs_22
     # pkgs.ocrmypdf
     pkgs.nixfmt
     pkgs.wifi-password
