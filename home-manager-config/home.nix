@@ -31,7 +31,28 @@ in {
   # programs.home-manager.enable = true;
 
   home.packages = [
-    pkgs.atuin # bash history
+    # bash history
+    # fix super annoying bug where atuin selects wrong history entry when you press enter
+    # https://github.com/atuinsh/atuin/pull/2715
+    (pkgs.atuin.overrideAttrs (old: rec {
+      version = "18.6.1";
+      src = pkgs.fetchFromGitHub {
+        owner = "atuinsh";
+        repo = "atuin";
+        rev = "v${version}";
+        hash = "sha256-aRaUiGH2CTPtmbfrtLlNfoQzQWG817eazWctqwRlOCE";
+      };
+      cargoHash = if pkgs.stdenv.hostPlatform.isLinux then
+        lib.fakeHash # TODO: set when I try on linux
+      else
+        "sha256-umagQYzOMr3Jh1RewjT0aX5FpYxs9N/70NZXoGaAfi4=";
+      # recalculate cargoDeps since buildRustPackage calculates attributes that overrideAttrs does not automatically recalculate
+      # https://github.com/NixOS/nixpkgs/blob/8ef82d9b1dd1df062acb74eba5928738d951facb/pkgs/build-support/rust/build-rust-package/default.nix#L91-L105
+      cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+        inherit src;
+        hash = cargoHash;
+      };
+    }))
     # pkgs.python3
     pkgs.direnv # for lorri
     pkgs.git
