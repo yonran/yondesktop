@@ -20,15 +20,15 @@ in {
     systemd.services.owntracks-recorder = {
       description = "owntracks-recorder Service";
       wantedBy = [ "multi-user.target" ];
-      dependsOn = [ "mosquitto.service" ];
-      after = [ "network.target", "mosquitto.service" ];
+      wants = [ "mosquitto.service" ];
+      after = [ "network.target" "mosquitto.service" ];
       serviceConfig = {
         ExecStart = "${owntracks-recorder-package}/bin/ot-recorder owntracks/#  ";
         User = "owntracks-recorder";
         Group = "owntracks-recorder";
         # all the config is in /etc/default/ot-recorder
         # Environment = {
-        #   "METRICS_PORT" = "${toString cfg.metricsPort}";
+        #   "OTR_PORT" = "${toString cfg.metricsPort}";
         # };
       };
     };
