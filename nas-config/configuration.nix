@@ -123,6 +123,11 @@
           # List of IPs assigned to this peer within the tunnel subnet. Used to configure routing.
           allowedIPs = [ "192.168.29.6/32" ];
         }
+        { # N laptop
+          publicKey = "jW3RCtvVvbYYvKVAoWIATPKURTL5DnUCMpyLo+Lar2s=";
+          # List of IPs assigned to this peer within the tunnel subnet. Used to configure routing.
+          allowedIPs = [ "192.168.29.7/32" ];
+        }
       ];
     };
   };
