@@ -301,7 +301,7 @@
 
 
   # enable wake-on-lan, but netgear router does not have a way to wake
-  networking.interfaces.ens9.wakeOnLan.enable = true;
+  networking.interfaces.enp7s0u2u4.wakeOnLan.enable = true;
 
   # don't sleep when the lid is shut (requires reboot)
   services.logind.lidSwitchExternalPower = "ignore";
