@@ -86,6 +86,11 @@
       # The port that WireGuard listens to. Must be accessible by the client.
       listenPort = 51820;
 
+      # Set MTU to 1280 to avoid PMTU blackhole issues. Path MTU testing shows
+      # 1368 bytes max (AT&T SF to Comcast Seattle), but 1280 provides safe margin
+      # for WireGuard overhead and is the IPv6 minimum MTU (RFC 8200).
+      mtu = 1280;
+
       # This allows the wireguard server to route your traffic to the internet and hence be like a VPN
       # For this to work you have to set the dnsserver IP of your router (or dnsserver of choice) in your clients
       # postSetup = ''
