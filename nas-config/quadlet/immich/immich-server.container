@@ -1,0 +1,35 @@
+[Unit]
+Description=Immich Server
+Requires=immich-redis.container immich-database.container
+After=immich-redis.container immich-database.container
+
+[Service]
+# The EnvironmentFile in Service is used for variable substitution in the unit file and is passed to podman
+EnvironmentFile=/etc/immich/.env
+
+[Container]
+# The EnvironmentFile in Container is passed to the container
+EnvironmentFile=/etc/immich/.env
+Image=ghcr.io/immich-app/immich-server:${IMMICH_VERSION}
+ContainerName=immich_server
+Pod=immich.pod
+Volume=${UPLOAD_LOCATION}:/data
+Volume=/etc/localtime:/etc/localtime:ro
+#Environment=IMMICH_HOST=0.0.0.0
+Environment=IMMICH_LOG_LEVEL=debug
+Environment=DB_PASSWORD=postgres
+Environment=DB_USERNAME=postgres
+Environment=DB_DATABASE_NAME=immich
+
+# the Dockefile has HealthCmd but podman isn't using it
+# https://github.com/containers/podman/issues/18904
+HealthCmd=immich-healthcheck
+# add an action to kill the container instead of just doing nothing
+HealthInterval=30s
+HealthTimeout=20s
+HealthRetries=5
+HealthStartPeriod=60s
+HealthOnFailure=kill
+
+[Install]
+WantedBy=default.target

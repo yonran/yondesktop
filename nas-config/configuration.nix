@@ -312,6 +312,54 @@
   services.logind.lidSwitchExternalPower = "ignore";
 
   virtualisation.docker.enable = true;
+  virtualisation.podman = {
+    enable = true;
+    # Required for containers under podman-compose to be able to talk to each other.
+    defaultNetwork.settings.dns_enabled = true;
+  };
+
+  # Add system users for Immich
+  users.groups.immich = { gid = 1001; };
+  users.groups.immich-db = { gid = 1002; };
+
+  users.users.immich = {
+    isSystemUser = true;
+    uid = 1001;
+    group = "immich";
+  };
+
+  users.users.immich-db = {
+    isSystemUser = true;
+    uid = 1002;
+    group = "immich-db";
+  };
+
+  # Deploy Quadlet files for Immich
+  environment.etc = {
+    "containers/systemd/immich.network".source = ./quadlet/immich/immich.network;
+    "containers/systemd/immich.pod".source = ./quadlet/immich/immich.pod;
+    "containers/systemd/immich-model-cache.volume".source = ./quadlet/immich/immich-model-cache.volume;
+    "containers/systemd/immich-redis.container".source = ./quadlet/immich/immich-redis.container;
+    "containers/systemd/immich-database.container".source = ./quadlet/immich/immich-database.container;
+    "containers/systemd/immich-machine-learning.container".source = ./quadlet/immich/immich-machine-learning.container;
+    "containers/systemd/immich-server.container".source = ./quadlet/immich/immich-server.container;
+    "immich/.env".text = ''
+      UPLOAD_LOCATION=/firstpool/family/immich/photos
+      DB_DATA_LOCATION=/firstpool/family/immich/postgres
+      IMMICH_VERSION=v1.137.3
+      DB_PASSWORD=postgres
+      IMMICH_HOST=0.0.0.0
+      IMMICH_LOG_LEVEL=debug
+      DB_USERNAME=postgres
+      DB_DATABASE_NAME=immich
+      DB_STORAGE_TYPE=HDD
+
+      REDIS_HOSTNAME=127.0.0.1
+      DB_HOSTNAME=127.0.0.1
+    '';
+  };
+
+  # Immich services will start automatically via proper systemd dependencies
 
   # spin down spinning disks
   # https://www.reddit.com/r/NixOS/comments/751i5t/how_to_specify_that_hard_disks_should_spin_down/

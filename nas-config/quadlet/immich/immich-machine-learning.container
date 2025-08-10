@@ -1,0 +1,28 @@
+[Unit]
+Description=Immich Machine Learning
+
+[Service]
+# The EnvironmentFile in Service is used for variable substitution in the unit file and is passed to podman
+EnvironmentFile=/etc/immich/.env
+
+[Container]
+# The EnvironmentFile in Container is passed to the container
+EnvironmentFile=/etc/immich/.env
+Image=ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION}
+ContainerName=immich_machine_learning
+Pod=immich.pod
+Volume=immich-model-cache.volume:/cache
+Environment=IMMICH_HOST=0.0.0.0
+Environment=IMMICH_LOG_LEVEL=debug
+
+# HEALTHCHECK copied from https://github.com/immich-app/immich/blob/v1.137.3/machine-learning/Dockerfile
+# apparently (as of podman 5.2.3) you must provide HealthCmd even if HEALTHCHECK exists
+HealthCmd=python3 healthcheck.py
+HealthInterval=30s
+HealthTimeout=20s
+HealthRetries=5
+HealthStartPeriod=60s
+HealthOnFailure=kill
+
+[Install]
+WantedBy=default.target
