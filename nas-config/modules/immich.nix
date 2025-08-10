@@ -1,4 +1,5 @@
-{ config, pkgs, ... }:
+# immich.nix — Option A (no pod), preserving your exact images, names, envs, health, ports
+{ config, lib, pkgs, ... }:
 
 {
   # Deploy environment file for Immich
@@ -14,154 +15,142 @@
       DB_DATABASE_NAME=immich
       DB_STORAGE_TYPE=HDD
 
-      REDIS_HOSTNAME=10.88.0.3
-      DB_HOSTNAME=10.88.0.2
+      REDIS_HOSTNAME=immich_redis
+      DB_HOSTNAME=immich_postgres
     '';
   };
-  # Enable Podman
   virtualisation.podman = {
     enable = true;
-    dockerCompat = true;
+    # Name-based container DNS so immich_server can reach immich_postgres / immich_redis
+    defaultNetwork.settings.dns_enabled = true;
+    # (left pruning/restart policies alone to match your current configs)
   };
 
-  # Create bridge interface for immich
-  networking.bridges.immich-br = {
-    interfaces = [ ]; # Virtual bridge, no physical interfaces
-  };
+  virtualisation.oci-containers = {
+    backend = "podman";
+    containers = {
 
-  networking.interfaces.immich-br = {
-    ipv4.addresses = [{
-      address = "10.88.0.1";
-      prefixLength = 24;
-    }];
-  };
+      ########## Immich PostgreSQL Database ##########
+      immich_postgres = {
+        # exact image line from your .container
+        image = "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:32324a2f41df5de9efe1af166b7008c3f55646f8d0e00d9550c16c9822366b4a";
 
-  # Create Podman network using the bridge interface
-  systemd.services.create-immich-podman-network = {
-    serviceConfig.Type = "oneshot";
-    wantedBy = [ 
-      "podman-immich-database.service" 
-      "podman-immich-redis.service"
-      "podman-immich-machine-learning.service"
-      "podman-immich-server.service"
-    ];
-    script = ''
-      ${pkgs.podman}/bin/podman network exists immich || \
-      ${pkgs.podman}/bin/podman network create \
-        --driver bridge \
-        --opt parent=immich-br \
-        --subnet 10.88.0.0/24 \
-        --gateway 10.88.0.1 \
-        immich
-    '';
-  };
+        environmentFiles = [ "/etc/immich/.env" ];
+        environment = {
+          POSTGRES_PASSWORD = "postgres";
+          POSTGRES_USER = "postgres";
+          POSTGRES_DB = "immich";
+          POSTGRES_INITDB_ARGS = "--data-checksums";
+          DB_STORAGE_TYPE = "HDD";
+        };
 
-  # Create immich model cache volume
-  systemd.services.create-immich-model-cache = {
-    serviceConfig.Type = "oneshot";
-    wantedBy = [ "podman-immich-machine-learning.service" ];
-    script = ''
-      ${pkgs.podman}/bin/podman volume exists immich-model-cache || \
-      ${pkgs.podman}/bin/podman volume create immich-model-cache
-    '';
-  };
+        # keep the same volume mapping token
+        volumes = [
+          "${DB_DATA_LOCATION}:/var/lib/postgresql/data"
+        ];
 
-  virtualisation.oci-containers.containers = {
-    # Immich PostgreSQL Database
-    immich-database = {
-      image = "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:32324a2f41df5de9efe1af166b7008c3f55646f8d0e00d9550c16c9822366b4a";
-      # The EnvironmentFile is only used to 
-      environmentFiles = [ "/etc/immich/.env" ];
-      environment = {
-        POSTGRES_PASSWORD = "\${DB_PASSWORD}";
-        POSTGRES_USER = "\${DB_USERNAME}";
-        POSTGRES_DB = "\${DB_DATABASE_NAME}";
-        POSTGRES_INITDB_ARGS = "--data-checksums";
-        DB_STORAGE_TYPE = "HDD";
+        # shm-size in Quadlet -> Podman arg here
+        extraOptions = [
+          "--network=podman"
+          "--shm-size=128m"
+        ];
+
+        # No Restart= in your Quadlet -> leave defaults here too
       };
-      volumes = [ "\${DB_DATA_LOCATION}:/var/lib/postgresql/data" ];
-      extraOptions = [ 
-        "--network=immich"
-        "--ip=10.88.0.2"  # Static IP on bridge network
-        "--shm-size=128m"
-      ];
-    };
 
-    # Immich Redis Cache
-    immich-redis = {
-      image = "docker.io/valkey/valkey:8-bookworm@sha256:facc1d2c3462975c34e10fccb167bfa92b0e0dbd992fc282c29a61c3243afb11";
-      extraOptions = [
-        "--network=immich"
-        "--ip=10.88.0.3"  # Static IP on bridge network
-        "--health-cmd=redis-cli ping"
-        "--health-interval=10s"
-        "--health-timeout=5s"
-        "--health-retries=3"
-        "--health-on-failure=kill"
-      ];
-    };
+      ########## Immich Redis (Valkey) ##########
+      immich_redis = {
+        image = "docker.io/valkey/valkey:8-bookworm@sha256:facc1d2c3462975c34e10fccb167bfa92b0e0dbd992fc282c29a61c3243afb11";
 
-    # Immich Machine Learning
-    immich-machine-learning = {
-      image = "ghcr.io/immich-app/immich-machine-learning:\${IMMICH_VERSION}";
-      # The EnvironmentFile in Service is used for variable substitution in the unit file and is passed to podman
-      environmentFiles = [ "/etc/immich/.env" ];
-      environment = {
-        IMMICH_HOST = "0.0.0.0";
-        IMMICH_LOG_LEVEL = "debug";
+        extraOptions = [
+          "--network=podman"
+          # healthcheck from your Quadlet:
+          "--health-cmd=redis-cli ping || exit 1"
+          "--health-interval=10s"
+          "--health-timeout=5s"
+          "--health-retries=3"
+        ];
+
+        # no restart policy set in your Quadlet -> unchanged
       };
-      volumes = [ "immich-model-cache:/cache" ];
-      extraOptions = [
-        "--network=immich"
-        "--ip=10.88.0.4"  # Static IP on bridge network
-        # HEALTHCHECK copied from https://github.com/immich-app/immich/blob/v1.137.3/machine-learning/Dockerfile
-        # apparently (as of podman 5.2.3) you must provide HealthCmd even if HEALTHCHECK exists
-        "--health-cmd=python3 healthcheck.py"
-        "--health-interval=30s"
-        "--health-timeout=20s"
-        "--health-retries=5"
-        "--health-start-period=60s"
-        "--health-on-failure=kill"
-      ];
-    };
 
-    # Immich Server
-    immich-server = {
-      image = "ghcr.io/immich-app/immich-server:\${IMMICH_VERSION}";
-      # The EnvironmentFile in Service is used for variable substitution in the unit file and is passed to podman
-      environmentFiles = [ "/etc/immich/.env" ];
-      environment = {
-        # IMMICH_HOST = "0.0.0.0";  # commented out from original
-        IMMICH_LOG_LEVEL = "debug";
-        DB_PASSWORD = "postgres";
-        DB_USERNAME = "postgres";  
-        DB_DATABASE_NAME = "immich";
-        DB_HOSTNAME = "10.88.0.2";  # Point to database container IP
-        REDIS_HOSTNAME = "10.88.0.3";  # Point to redis container IP
+      ########## Immich Machine Learning ##########
+      immich_machine_learning = {
+        image = "ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION}";
+        environmentFiles = [ "/etc/immich/.env" ];
+        environment = {
+          IMMICH_HOST = "0.0.0.0";
+          IMMICH_LOG_LEVEL = "debug";
+        };
+
+        volumes = [
+          # preserve your named volume -> container path
+          "immich-model-cache:/cache"
+        ];
+
+        extraOptions = [
+          "--network=podman"
+          # healthcheck copied from your Quadlet
+          "--health-cmd=python3 healthcheck.py"
+          "--health-interval=30s"
+          "--health-timeout=20s"
+          "--health-retries=5"
+          "--health-start-period=60s"
+        ];
       };
-      volumes = [
-        "\${UPLOAD_LOCATION}:/data"
-        "/etc/localtime:/etc/localtime:ro"
-      ];
-      extraOptions = [
-        "--network=immich"
-        "--ip=10.88.0.5"  # Static IP on bridge network
-        # the Dockerfile has HealthCmd but podman isn't using it
-        # https://github.com/containers/podman/issues/18904
-        "--health-cmd=immich-healthcheck"
-        # add an action to kill the container instead of just doing nothing
-        "--health-interval=30s"
-        "--health-timeout=20s"
-        "--health-retries=5"
-        "--health-start-period=60s"
-        "--health-on-failure=kill"
-      ];
+
+      ########## Immich Server ##########
+      immich_server = {
+        image = "ghcr.io/immich-app/immich-server:${IMMICH_VERSION}";
+        environmentFiles = [ "/etc/immich/.env" ];
+        environment = {
+          IMMICH_HOST = "0.0.0.0";
+          IMMICH_LOG_LEVEL = "debug";
+
+          # keep exactly what you had in the Quadlet
+          DB_PASSWORD = "postgres";
+          DB_USERNAME = "postgres";
+          DB_DATABASE_NAME = "immich";
+          # Hostnames come from /etc/immich/.env if you set them there.
+          # On this no-pod setup with DNS, use:
+          #   DB_HOSTNAME=immich_postgres
+          #   REDIS_HOSTNAME=immich_redis
+          # but I'm not forcing them here to honor your "same variables" request.
+        };
+
+        volumes = [
+          # preserved verbatim
+          "${UPLOAD_LOCATION}:/data"
+          "/etc/localtime:/etc/localtime:ro"
+        ];
+
+        # Your pod exposed 2283:2283 — mirror that on the server
+        ports = [ "2283:2283/tcp" ];
+
+        extraOptions = [
+          "--network=podman"
+          # (no HealthOnFailure override since your server Quadlet didn't include one)
+        ];
+
+        # In your Quadlet, you added explicit {Requires,After} on redis/db.
+        # We mirror that ordering at the systemd layer here.
+        dependsOn = [ "immich_postgres" "immich_redis" ];
+      };
     };
   };
 
-  # Service dependencies - immich-server requires redis and database
-  systemd.services.podman-immich-server = {
-    requires = [ "podman-immich-redis.service" "podman-immich-database.service" ];
-    after = [ "podman-immich-redis.service" "podman-immich-database.service" ];
+  # Optional: create the named volume used by ML (Podman will auto-create if missing;
+  # NixOS doesn't need an explicit declaration for it).
+  # If you prefer host paths instead, replace "immich-model-cache:/cache" with
+  # "/var/lib/immich/model-cache:/cache" and add a tmpfiles rule.
+
+  # If you want a convenience stack target (start/stop all together), uncomment:
+  systemd.targets."immich-stack" = {
+    description = "Immich stack (server + db + redis + ml)";
+    wantedBy = [ "multi-user.target" ];
   };
+  systemd.services.podman-immich_postgres.partOf = [ "immich-stack.target" ];
+  systemd.services.podman-immich_redis.partOf = [ "immich-stack.target" ];
+  systemd.services.podman-immich_machine_learning.partOf = [ "immich-stack.target" ];
+  systemd.services.podman-immich_server.partOf = [ "immich-stack.target" ];
 }
