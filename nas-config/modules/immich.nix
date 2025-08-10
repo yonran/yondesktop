@@ -1,6 +1,13 @@
 # immich.nix — Option A (no pod), preserving your exact images, names, envs, health, ports
 { config, lib, pkgs, ... }:
 
+let
+  # Define variables from environment file
+  UPLOAD_LOCATION = "/firstpool/family/immich/photos";
+  DB_DATA_LOCATION = "/firstpool/family/immich/postgres";
+  IMMICH_VERSION = "v1.137.3";
+in
+
 {
   # Deploy environment file for Immich
   environment.etc = {
@@ -125,7 +132,7 @@
         ];
 
         # Your pod exposed 2283:2283 — mirror that on the server
-        ports = [ "2283:2283/tcp" ];
+        ports = [ "2283:2283/tcp" "3001:2283/tcp" ];
 
         extraOptions = [
           "--network=podman"
