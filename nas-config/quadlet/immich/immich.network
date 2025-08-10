@@ -1,7 +1,0 @@
-[Unit]
-Description=Immich Network
-
-[Network]
-
-[Install]
-WantedBy=default.target

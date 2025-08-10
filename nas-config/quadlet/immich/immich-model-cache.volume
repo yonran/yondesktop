@@ -1,7 +1,0 @@
-[Unit]
-Description=Immich Model Cache Volume
-
-[Volume]
-
-[Install]
-WantedBy=default.target
