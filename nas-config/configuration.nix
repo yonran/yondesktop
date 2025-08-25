@@ -259,7 +259,7 @@
       # tree
       git
       iotop
-      dstat
+      dool
       smartmontools
       iperf
     ];

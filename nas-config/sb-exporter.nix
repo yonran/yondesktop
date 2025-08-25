@@ -28,25 +28,15 @@ python3Packages.buildPythonApplication rec {
     });
   };
   postPatch = ''
-    # the existing pyproject.toml forces prometheus-client 0.20.0,
-    # but the current version in python3Packages is 0.21.0
-    # substituteInPlace pyproject.toml --replace \
-    #   'prometheus-client = "^0.20.0"' \
-    #   'prometheus-client = "^0.21.0"'
+    substituteInPlace pyproject.toml --replace-fail \
+      'structlog = "^24.1.0"' \
+      'structlog = "^25"'
 
-    substituteInPlace pyproject.toml --replace \
+    substituteInPlace pyproject.toml --replace-fail \
       'packages = [{ include = "app" }]' \
       'packages = [{ include = "err", from = "app" }, { include = "sb8200", from = "app" }, { include = "err", from = "app" }, { include = "util", from = "app" }]'
 
-    # # fix ModuleNotFoundError: No module named 'err'
-    # substituteInPlace app/main.py --replace \
-    #   'from err.exceptions import ModemNotOkError, NoAuthTokenError' \
-    #   'from .err.exceptions import ModemNotOkError, NoAuthTokenError'
-    # substituteInPlace app/main.py --replace \
-    #   'from sb8200.scrape import (' \
-    #   'from .sb8200.scrape import ('
-
-    # Adding [tool.poetry.scripts] or 
+    # Adding [tool.poetry.scripts] or [project.scripts]
     cat >> pyproject.toml <<EOF
     [tool.poetry.scripts]
     sb-exporter = { reference = "app/main.py", type = "file" }
