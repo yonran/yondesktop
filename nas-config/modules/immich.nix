@@ -5,7 +5,7 @@ let
   # Define variables from environment file
   UPLOAD_LOCATION = "/firstpool/family/immich/photos";
   DB_DATA_LOCATION = "/firstpool/family/immich/postgres";
-  IMMICH_VERSION = "v1.137.3";
+  IMMICH_VERSION = "v1.139.3";
   DB_PASSWORD = "postgres";
   DB_USERNAME = "postgres";
   DB_DATABASE_NAME = "immich";
