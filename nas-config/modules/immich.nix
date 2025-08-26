@@ -52,6 +52,8 @@ in
         # keep the same volume mapping token
         volumes = [
           "${DB_DATA_LOCATION}:/var/lib/postgresql/data"
+          # postgres 14 needs to use a different pg_stats_tmp or else it will write to disk every 15s or so
+          "/run/immich_pg_stat_tmp:/var/lib/postgresql/data/pg_stat_tmp"
         ];
 
         # shm-size in Quadlet -> Podman arg here
@@ -168,6 +170,15 @@ in
     after = [ "firstpool-family.mount" "network-online.target" ];
     partOf = [ "immich-stack.target" "firstpool-family.mount" ];
     unitConfig.RequiresMountsFor = "/firstpool/family";
+    # https://github.com/NixOS/nixpkgs/blob/nixos-25.05/nixos/modules/virtualisation/oci-containers.nix#L565
+    
+    serviceConfig.RuntimeDirectory = lib.mkForce "immich-database immich_pg_stat_tmp";
+    preStart = ''
+      # mkdir -p /run/immich_pg_stat_tmp
+      set -eux
+      chown 999:999 /run/immich_pg_stat_tmp
+      # chmod 0700 /run/immich_pg_stat_tmp
+    '';
   };
   
   systemd.services.podman-immich-server = {
@@ -188,4 +199,5 @@ in
     after = [ "network-online.target" ];
     partOf = [ "immich-stack.target" ];
   };
+
 }
