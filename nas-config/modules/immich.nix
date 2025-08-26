@@ -60,6 +60,9 @@ in
           "--shm-size=128m"
         ];
 
+        # expose the db
+        ports = [ "5432:5432/tcp" ];
+
         # systemd dependencies handled separately below
         dependsOn = [];
       };
