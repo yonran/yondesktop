@@ -19,6 +19,7 @@
       ./hardware-configuration.nix
       ./zfs-backup-module.nix
       ./home-monitoring.nix
+      ./modules/email.nix
       ./owntracks-recorder-service.nix
       ./modules/immich.nix
     ];
@@ -33,6 +34,25 @@
   # enable home-monitoring
   services.home-monitoring = {
     enable = true;
+  };
+  # email relay MTA (local Postfix only; used by Alertmanager/ZED)
+  services.alertingEmail = {
+    enable = true;
+    hostname = "home.yonathan.org";
+    relay = {
+      enable = true;
+      host = "smtp.gmail.com";
+      port = 587;
+      username = "yonathan@gmail.com";
+      envelopeFrom = "yonathan@gmail.com";
+    };
+  };
+
+  # alert email settings for monitoring
+  services.home-monitoring.alertEmail = {
+    toAddress = "yonathan@gmail.com";
+    fromAddress = "yonathan@gmail.com";
+    smtpSmarthost = "127.0.0.1:25"; # local Postfix
   };
   # enable mqtt server (needed for owntracks-recorder)
   services.mosquitto = {
@@ -405,4 +425,3 @@
   system.stateVersion = "23.11"; # Did you read the comment?
 
 }
-

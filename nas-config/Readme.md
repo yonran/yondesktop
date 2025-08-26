@@ -113,3 +113,79 @@ mkdir -p /firstpool/family/owntracks/recorder/store
 chmod o+x /firstpool/family
 sudo chgrp -R owntracks-recorder /firstpool/family/owntracks
 ```
+
+## Monitoring and Email Alerts
+
+This repo configures a local monitoring stack and email alerting for disk space, SMART, and ZFS events.
+
+- Prometheus + node_exporter + blackbox_exporter + sb-exporter (cable modem).
+- Grafana on `http://<nas-ip>:3000` (default admin/admin, then change password).
+- Alertmanager routes alerts to email via a local Postfix MTA.
+- ZFS ZED emails on zpool events.
+
+Configuration entry points
+- `nas-config/home-monitoring.nix`: Prometheus, Grafana, exporters (enabled in `configuration.nix`).
+- `nas-config/modules/email.nix`: Local Postfix relay (e.g., to Gmail on 587).
+- `nas-config/home-monitoring.nix`: Prometheus, Grafana, exporters, Alertmanager, ZFS ZED, alert rules.
+
+What is enabled by default
+- In `nas-config/configuration.nix`:
+  - `services.home-monitoring.enable = true;`
+  - `services.alertingEmail.enable = true;` (local Postfix)
+  - `services.home-monitoring.alertEmail = { to = ..., from = ..., smtpSmarthost = "127.0.0.1:25"; }`
+  - Email: Alertmanager uses the local Postfix which relays to Gmail on port 587.
+  - Disk-free alert threshold: 1 GiB available (5m sustained) on non-ephemeral filesystems.
+
+One-time Gmail setup (required)
+1) Create a Gmail App Password
+   - Google Account → Security → 2‑Step Verification → [App passwords](https://myaccount.google.com/apppasswords) → App: Mail → Device: Other (e.g., "Postfix").
+
+2) Add SMTP credentials on the NAS (root-only, not in Git)
+   - Create `/etc/postfix/sasl_passwd` with mode 0600:
+     ```
+     # this file is used as a smtp_sasl_password_maps texthash input
+     # https://www.postfix.org/postconf.5.html#smtp_sasl_password_maps
+     # for file format see https://www.postfix.org/postmap.1.html
+     [smtp.gmail.com]:587 yonathan@gmail.com:APP_PASSWORD_HERE
+     ```
+   - Reload Postfix:
+     ```
+     sudo systemctl reload postfix
+     ```
+
+3) Rebuild NixOS
+   ```
+   sudo nixos-rebuild switch
+   ```
+
+How to test email delivery
+- Simple sendmail test:
+  ```
+  printf "Subject: test via Gmail relay\n\nhello\n" | sendmail -v yonathan@gmail.com
+  ```
+- Alertmanager path (should email via Gmail relay):
+  ```
+  curl -s -XPOST localhost:9093/api/v2/alerts \
+    -H 'Content-Type: application/json' \
+    -d '[{"labels":{"alertname":"TestEmail"},"annotations":{"summary":"test"}}]'
+  ```
+
+Services and status
+- Check status/logs:
+  ```
+  systemctl status postfix zed alertmanager prometheus grafana
+  journalctl -u postfix -u zed -u alertmanager -e
+  ```
+
+Disk-space alert details
+- Rule fires when available bytes < 1,073,741,824 (1 GiB) for 5 minutes.
+- Excludes tmpfs, devtmpfs, overlay, /run, /boot, and /nix/store.
+- Adjust threshold in `services.alertingEmail.diskFreeBytesThreshold` (bytes).
+
+ZFS alerts
+- ZED: emails on pool state changes, errors, resilver/scrub events, etc.
+
+Notes
+- Postfix listens on localhost only; nothing is exposed externally.
+- Outbound port 25 is blocked on residential cable; we relay via Gmail on port 587.
+- From/Envelope are rewritten to `yonathan@gmail.com` for Gmail acceptance.
