@@ -45,12 +45,25 @@
           enabledCollectors = [ "systemd" ];
           port = 9100;
         };
+        smartctl = {
+          enable = true;
+          # Poll every 5 minutes (greater than hdparm -S 10 = 50s)
+          maxInterval = "5m";
+          # Leave devices empty to autodiscover; set specific /dev/disk/by-id/* to restrict
+          devices = [ ];
+        };
       };
       scrapeConfigs = [
         {
           job_name = "node";
           static_configs = [{
             targets = [ "localhost:${toString config.services.prometheus.exporters.node.port}" ];
+          }];
+        }
+        {
+          job_name = "smartctl";
+          static_configs = [{
+            targets = [ "localhost:${toString config.services.prometheus.exporters.smartctl.port}" ];
           }];
         }
         {
@@ -113,6 +126,14 @@
               annotations:
                 summary: "Low disk space on {{ $labels.instance }} {{ $labels.mountpoint }}"
                 description: "Available space is below ${toString config.services.home-monitoring.diskFreeBytesThreshold} bytes on {{ $labels.device }} mounted at {{ $labels.mountpoint }} ({{ $value | humanize1024 }} left)."
+            - alert: SmartStatusFailed
+              expr: (smartctl_device_smart_healthy == 0) or (smartctl_device_smart_status == 0)
+              for: 2m
+              labels:
+                severity: critical
+              annotations:
+                summary: "SMART failure on {{ $labels.device }}"
+                description: "SMART reports device failing: {{ $labels.device }}. Investigate and replace the disk."
         '')
       ];
     };
@@ -182,6 +203,7 @@
       config.services.grafana.settings.server.http_port
       config.services.prometheus.port
       config.services.prometheus.exporters.node.port
+      config.services.prometheus.exporters.smartctl.port
       config.services.prometheus.alertmanager.port
       9115  # Blackbox exporter
       config.services.sb-exporter.metricsPort

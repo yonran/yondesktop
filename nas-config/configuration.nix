@@ -393,7 +393,7 @@
     ACTION=="add", SUBSYSTEM=="block", ATTR{partition}!="1", TAG+="hdparmset", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hdparm-set@%k.service"
   '';
   systemd.services."hdparm-set@" = {
-    description = "Set hdparm -S 10 on newly added disks %I";
+    description = "Set hdparm -S 10 (sleep in 5s * 10) on newly added disks %I";
     serviceConfig.Type = "oneshot";
     serviceConfig.ExecStart = "${pkgs.hdparm}/bin/hdparm -S 10 /dev/%I";
   };
