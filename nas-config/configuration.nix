@@ -22,6 +22,7 @@
       ./modules/email.nix
       ./owntracks-recorder-service.nix
       ./modules/immich.nix
+      ./modules/monitoring-scripts.nix
     ];
   # enable zfs-backup-module
   services.zfsBackup = {

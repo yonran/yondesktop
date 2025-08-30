@@ -1,0 +1,54 @@
+#!/usr/bin/env bpftrace
+
+// Count bytes written by process to ZFS-backed regular files
+
+kfunc:vfs_write
+/ args->file && args->file->f_inode &&
+  ((args->file->f_inode->i_mode & 0170000) == 0100000) &&
+  args->file->f_inode->i_sb &&
+  args->file->f_inode->i_sb->s_type &&
+  str(args->file->f_inode->i_sb->s_type->name) == "zfs" /
+{
+    @in_write[tid] = 1;
+}
+
+kretfunc:vfs_write
+/ @in_write[tid] /
+{
+    if (retval > 0) {
+        @bytes_by_task[pid, comm] += retval;
+    }
+    delete(@in_write[tid]);
+}
+
+kfunc:vfs_writev
+/ args->file && args->file->f_inode &&
+  ((args->file->f_inode->i_mode & 0170000) == 0100000) &&
+  args->file->f_inode->i_sb &&
+  args->file->f_inode->i_sb->s_type &&
+  str(args->file->f_inode->i_sb->s_type->name) == "zfs" /
+{
+    @in_writev[tid] = 1;
+}
+
+kretfunc:vfs_writev
+/ @in_writev[tid] /
+{
+    if (retval > 0) {
+        @bytes_by_task[pid, comm] += retval;
+    }
+    delete(@in_writev[tid]);
+}
+
+interval:s:60 {
+    time("%H:%M:%S  ");
+    printf("ZFS file writes in the last 60s (bytes by PID/COMM):\n");
+    print(@bytes_by_task);
+    clear(@bytes_by_task);
+}
+
+END {
+    time("%H:%M:%S  ");
+    printf("Final dump:\n");
+    print(@bytes_by_task);
+}
