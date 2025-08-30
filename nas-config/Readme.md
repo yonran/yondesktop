@@ -100,7 +100,8 @@ To configure owntracks-recorder, we need to create
 `/etc/default/ot-recorder`
 
 ```
-OTR_STORAGEDIR="/firstpool/family/owntracks/recorder/store
+# Note that OTR_STORAGEDIR is default /var/spool/owntracks/recorder/store;
+# we copy from there to /firstpool/family/owntracks/recorder/store later
 
 # https://opencagedata.com/dashboard account with username yonathan@gmail.com
 OTR_GEOKEY="opencage:xxxxxxxxxxxxx"
