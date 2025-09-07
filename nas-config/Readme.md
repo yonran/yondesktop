@@ -190,3 +190,20 @@ Notes
 - Postfix listens on localhost only; nothing is exposed externally.
 - Outbound port 25 is blocked on residential cable; we relay via Gmail on port 587.
 - From/Envelope are rewritten to `yonathan@gmail.com` for Gmail acceptance.
+
+## Jellyfin
+
+Jellyfin is enabled and listening on the default HTTP port:
+
+- UI: `http://<nas-ip>:8096`
+- Firewall: ports 8096 (HTTP) and 8920 (HTTPS) are opened
+- HW accel: VAAPI is enabled via `video`/`render` groups and OpenGL VAAPI drivers
+
+First-time setup
+- Visit the UI, create an admin user, and add your libraries.
+- Suggested paths: `/firstpool/family/media/<Movies|TV|Music|Photos>` (already shared via Samba as "public").
+- Metadata defaults to Jellyfin’s data dir; you don’t need write access to media folders unless you choose to save artwork alongside media.
+
+Notes
+- If using Intel iGPU, the config includes `intel-media-driver` and `vaapiIntel` for older gens.
+- For AMD/NVIDIA, you may adjust `hardware.opengl.extraPackages` accordingly.

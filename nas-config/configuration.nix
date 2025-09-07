@@ -255,6 +255,28 @@
     openFirewall = true;
   };
 
+  # Jellyfin media server
+  # - Listens on 8096 (HTTP) and optionally 8920 (HTTPS)
+  # - Expose on LAN by opening firewall
+  # - Enable VAAPI hardware acceleration by granting access to render/video
+  services.jellyfin = {
+    enable = true;
+    openFirewall = true; # open 8096/8920
+  };
+
+  # Hardware acceleration (VAAPI) for Jellyfin transcoding
+  # Newer NixOS uses hardware.graphics (opengl options are deprecated)
+  hardware.graphics = {
+    enable = true;
+    extraPackages = with pkgs; [
+      intel-media-driver # Intel iHD (Gen9+)
+      vaapiIntel         # Intel i965 (older gens)
+      vaapiVdpau
+      libvdpau-va-gl
+    ];
+  };
+  users.users.jellyfin.extraGroups = [ "video" "render" ];
+
 
   # Enable CUPS to print documents.
   # services.printing.enable = true;
