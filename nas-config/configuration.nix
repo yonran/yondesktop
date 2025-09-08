@@ -87,9 +87,10 @@
   networking.hostId = "2220fa03";
   networking.firewall = {
     # enable wireguard https://nixos.wiki/wiki/WireGuard
-    allowedUDPPorts = [ 51820 ];
+    # also open UDP/443 for HTTP/3 (QUIC)
+    allowedUDPPorts = [ 51820 443 ];
     # enable iperf
-    allowedTCPPorts = [ 5201 ];
+    allowedTCPPorts = [ 5201 80 443 ];
   };
   networking.firewall.interfaces.wg0 = {
     allowedTCPPorts = [
@@ -280,6 +281,42 @@
 
   # Enable CUPS to print documents.
   # services.printing.enable = true;
+
+  # Caddy reverse proxy for Immich over HTTPS with rate limiting plugin and HSTS
+  services.caddy = {
+    enable = true;
+    email = "yonathan@gmail.com"; # ACME contact
+    # Build Caddy with the rate_limit plugin
+    package = pkgs.caddy.withPlugins {
+      plugins = [ "github.com/mholt/caddy-ratelimit@v0.1.1-0.20250318145942-a8e9f68d7bed" ];
+      hash = "sha256-fGWEtofpGTaovOu+FL+Dx7k44T7ZsS4ThO6evaVCvIQ=";
+    };
+    # no global Caddyfile directives
+    extraConfig = ''
+    '';
+    virtualHosts."photos.yonathan.org".extraConfig = ''
+      # Compression and security headers
+      encode zstd gzip
+      header {
+        # Strict Transport Security (enable preload only if all subdomains are HTTPS)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+      }
+
+      # Rate limit only auth endpoints, then proxy everything
+      rate_limit {
+        zone auth_zone {
+          match {
+            path /api/auth/* /api/auth/login /api/user/login
+          }
+          key {remote_host}
+          events 10
+          window 60s
+        }
+      }
+
+      reverse_proxy 127.0.0.1:2283
+    '';
+  };
 
   # Enable sound.
   # sound.enable = true;
