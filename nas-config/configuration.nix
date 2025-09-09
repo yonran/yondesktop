@@ -237,6 +237,15 @@
         "directory mask" = "0755";
         "force user" = "yonran";
         "force group" = "users";
+        # Recycle bin for safe deletes
+        "vfs objects" = "recycle";
+        "recycle:repository" = ".recycle";
+        "recycle:keeptree" = "yes";
+        "recycle:versions" = "yes";
+        "recycle:touch" = "yes";
+        "recycle:touch_mtime" = "yes";
+        "recycle:exclude" = "*.tmp,*.temp,~$*";
+        "recycle:exclude_dir" = ".recycle";
       };
       "private" = {
         # smbpasswd -a username
@@ -248,6 +257,75 @@
         "directory mask" = "0755";
         "force user" = "yonran";
         "force group" = "users";
+        # Recycle bin for safe deletes
+        "vfs objects" = "recycle";
+        "recycle:repository" = ".recycle";
+        "recycle:keeptree" = "yes";
+        "recycle:versions" = "yes";
+        "recycle:touch" = "yes";
+        "recycle:touch_mtime" = "no";
+        "recycle:exclude" = "*.tmp,*.temp,~$*";
+        "recycle:exclude_dir" = ".recycle";
+      };
+      # Additional user shares within /firstpool/family
+      "yonran" = {
+        "path" = "/firstpool/family/yonran";
+        "browseable" = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "create mask" = "0755";
+        "directory mask" = "0755";
+        "force user" = "yonran";
+        "force group" = "users";
+        "valid users" = "yonran";
+        # Recycle bin for safe deletes
+        "vfs objects" = "recycle";
+        "recycle:repository" = ".recycle";
+        "recycle:keeptree" = "yes";
+        "recycle:versions" = "yes";
+        "recycle:touch" = "yes";
+        "recycle:touch_mtime" = "no";
+        "recycle:exclude" = "*.tmp,*.temp,~$*";
+        "recycle:exclude_dir" = ".recycle";
+      };
+      "nosiri" = {
+        "path" = "/firstpool/family/nosiri";
+        "browseable" = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "create mask" = "0755";
+        "directory mask" = "0755";
+        "force group" = "users";
+        "valid users" = "nosiri";
+        # Recycle bin for safe deletes
+        "vfs objects" = "recycle";
+        "recycle:repository" = ".recycle";
+        "recycle:keeptree" = "yes";
+        "recycle:versions" = "yes";
+        "recycle:touch" = "yes";
+        "recycle:touch_mtime" = "no";
+        "recycle:exclude" = "*.tmp,*.temp,~$*";
+        "recycle:exclude_dir" = ".recycle";
+      };
+      "yonran+nosiri" = {
+        "path" = "/firstpool/family/yonran+nosiri";
+        "browseable" = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "create mask" = "0755";
+        "directory mask" = "0755";
+        "force user" = "yonran";
+        "force group" = "users";
+        "valid users" = "yonran nosiri";
+        # Recycle bin for safe deletes
+        "vfs objects" = "recycle";
+        "recycle:repository" = ".recycle";
+        "recycle:keeptree" = "yes";
+        "recycle:versions" = "yes";
+        "recycle:touch" = "yes";
+        "recycle:touch_mtime" = "no";
+        "recycle:exclude" = "*.tmp,*.temp,~$*";
+        "recycle:exclude_dir" = ".recycle";
       };
     };
   };
@@ -475,6 +553,15 @@
       # pixel 6 ConnectBot
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDqxHb38PL4CRl7bbYqeQ1ekXRX45iNo9/Ocsel5ar5AH31Va0fD2iBBtV22I/tHcIv4PrGX2vbTiumeG/oTLjThcQFZkqXthFnbDYeJ8+3fdeM9LcRcbt2G1vZmn+9hOSHNWAvfufpEgahHiZjJKOTIkKvhcNOGwsGh4CX+CZ7Vp3xq+tAaHTggczpJOzEPzfH/sBgXWA9+4v7eA+Kgw0Qu+Tkm2jZZjhyRD+PKie2UbodqZpI11rmCGFbS41ftA+kpcdy1QkS/Fa76uLSsW/3ejaKCcmVQKIZlOSJFWS48GEqr+SbWP1RA9FWiR9BpfOpE6S8oRylYzrZBOlEnKn pixel6"
     ];
+  };
+  # Samba-only user account (no shell login)
+  users.users.nosiri = {
+    isSystemUser = true;
+    description = "Samba user nosiri";
+    home = "/var/empty";
+    createHome = false;
+    shell = "${pkgs.shadow}/bin/nologin";
+    group = "users";
   };
   security.sudo.wheelNeedsPassword = false;
 
