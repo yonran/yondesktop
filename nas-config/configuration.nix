@@ -355,7 +355,10 @@
     "d /srv/jellyfin-media 0755 jellyfin jellyfin -"
   ];
   systemd.services.jellyfin = {
-    after = [ "local-fs.target" ];
+    requires = [ "firstpool-family.mount" ];
+    after = [ "firstpool-family.mount" "local-fs.target" ];
+    partOf = [ "firstpool-family.mount" ];
+    unitConfig.RequiresMountsFor = "/firstpool/family";
     serviceConfig = {
       # File-system lockdown: only write to state/cache/logs; media is read-only
       ProtectSystem = "strict";
