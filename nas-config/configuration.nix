@@ -438,11 +438,36 @@
       plugins = [
         "github.com/mholt/caddy-ratelimit@v0.1.1-0.20250318145942-a8e9f68d7bed"
         "github.com/caddy-dns/cloudflare@v0.2.2-0.20250724223520-f589a18c0f5d"
+        "github.com/greenpau/caddy-security@v1.1.31"
       ];
-      hash = "sha256-DNZgzSW5OnO0Dh1DO+4KYLB2eHCO1kmDdstIipGB5nU=";
+      hash = "sha256-n9tslwOhZTjP1OWPMt7rZJJ/aojHQmUNUZVlZopEvNk=";
     };
-    # no global Caddyfile directives
-    extraConfig = ''
+    # Global Caddyfile (must be first). Use globalConfig to emit it at top.
+    globalConfig = ''
+      debug
+      # Ensure plugin directives order well
+      order authenticate before respond
+      order authorize before reverse_proxy
+
+      # Configure caddy-security app: Google OIDC portal and policy
+      security {
+        # Define Google OAuth2 IdP using shortcut (client_id client_secret)
+        oauth identity provider google {file.{$GOOGLE_CLIENT_ID_FILE}} {file.{$GOOGLE_CLIENT_SECRET_FILE}}
+
+        # Authentication portal issues/validates tokens; requires a signing key
+        authentication portal myportal {
+          # Provide a signing key; read it from a credential file
+          crypto key sign-verify {file.{$AUTH_SIGN_KEY_FILE}}
+          enable identity provider google
+        }
+
+        # Authorization policy: verify same key and set login URL
+        authorization policy mypolicy {
+          set auth url /auth
+          crypto key verify {file.{$AUTH_SIGN_KEY_FILE}}
+          allow email yonathan@gmail.com nosiri@gmail.com
+        }
+      }
     '';
     # https://caddyserver.com/docs/caddyfile/patterns#wildcard-certificates
     # To verify the converted json (with {$ENV} expanded), run curl localhost:2019/config/
@@ -502,6 +527,30 @@
 
         reverse_proxy 127.0.0.1:8096
       }
+
+      # Grafana
+      @grafana host grafana.yonathan.org
+      handle @grafana {
+        reverse_proxy 127.0.0.1:3000
+      }
+
+      # Prometheus behind OIDC SSO (Google) using caddy-security
+      # Mount portal endpoints (per plugin examples)
+      route /auth* {
+        authenticate * with myportal
+      }
+
+      # Do not apply authorizer to portal paths
+      @prom_noauth {
+        host prometheus.yonathan.org
+        not path /auth*
+      }
+      handle @prom_noauth {
+        route {
+          authorize with mypolicy
+          reverse_proxy 127.0.0.1:9090
+        }
+      }
     '';
   };
   # add a /etc/systemd/system/caddy.service.d/overrides.conf
@@ -510,11 +559,24 @@
     # 1) Create /etc/secrets/cloudflare_token.cred using `systemd-creds encrypt --tpm2 -n cloudflare_token.cred ...`
     # 2) LoadCredentialEncrypted passes it to the service; systemd decrypts into $CREDENTIALS_DIRECTORY/cloudflare_token.cred
     # 3) preStart writes an EnvironmentFile read by Caddy with the token value
-    serviceConfig.LoadCredentialEncrypted = [ "cloudflare_token.cred:/etc/secrets/cloudflare_token.cred" ];
+    serviceConfig.LoadCredentialEncrypted = [
+      "cloudflare_token.cred:/etc/secrets/cloudflare_token.cred"
+      # Google OIDC client credentials (TPM2-encrypted)
+      "google_client_id:/etc/secrets/google_client_id"
+      "google_client_secret:/etc/secrets/google_client_secret"
+      # Signing key for caddy-security tokens
+      "auth_sign_key:/etc/secrets/caddy_auth_sign_key.cred"
+    ];
     # Use a dedicated runtime dir for caddy and place the envfile under $RUNTIME_DIRECTORY/caddy
     serviceConfig.RuntimeDirectory = "caddy";
     # Export the token directly from the decrypted credential into the environment
-    serviceConfig.Environment = ["CLOUDFLARE_API_TOKEN_FILE=\"%d/cloudflare_token.cred\""];
+    # Expose credential file paths via %d, to avoid using the '@' expansion
+    serviceConfig.Environment = [
+      "CLOUDFLARE_API_TOKEN_FILE=%d/cloudflare_token.cred"
+      "GOOGLE_CLIENT_ID_FILE=%d/google_client_id"
+      "GOOGLE_CLIENT_SECRET_FILE=%d/google_client_secret"
+      "AUTH_SIGN_KEY_FILE=%d/auth_sign_key"
+    ];
   };
 
   # Enable TPM2 userspace stack so systemd can decrypt TPM2-sealed credentials

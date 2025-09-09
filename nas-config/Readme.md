@@ -98,6 +98,14 @@ sudo systemd-creds encrypt --uid=0 - /etc/secrets/cloudflare_token.cred
 # (paste the token, then enter, then Ctrl+D)
 ```
 
+Create [caddy-security OAuth2](https://docs.authcrunch.com/docs/authenticate/oauth/backend-oauth2-0002-google) keys.
+Create OAuth 2.0 Client ID at https://console.cloud.google.com/apis/credentials?project=yontriggers
+
+* configure Authorized redirect URIs: `https://prometheus.yonathan.org/auth/oauth2/google/authorization-code-callback`
+* `sudo systemd-creds encrypt --tpm2-device=auto - /etc/secrets/google_client_id`
+* `sudo systemd-creds encrypt --tpm2-device=auto - /etc/secrets/google_client_secret`
+* `uuidgen | tr -d '\n' | sudo systemd-creds encrypt --name auth_sign_key --tpm2-device=auto - /etc/secrets/caddy_auth_sign_key.cred`
+
 ## Configure sb-exporter
 
 To configure the monitoring of the cable sb-exporter modem monitor,
