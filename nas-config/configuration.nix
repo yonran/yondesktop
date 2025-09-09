@@ -455,21 +455,28 @@
       # Configure caddy-security app: Google OIDC portal and policy
       security {
         # Define Google OAuth2 IdP using shortcut (client_id client_secret)
-        oauth identity provider google {file.{$GOOGLE_CLIENT_ID_FILE}} {file.{$GOOGLE_CLIENT_SECRET_FILE}}
+        # TODO: caddy-security doesn't support {file.{$VAR}} syntax due to early parsing https://github.com/greenpau/caddy-security/issues/424
+        # Should be: {file.{$GOOGLE_CLIENT_ID_FILE}} {file.{$GOOGLE_CLIENT_SECRET_FILE}}
+        oauth identity provider google {file./run/credentials/caddy.service/google_client_id} {file./run/credentials/caddy.service/google_client_secret}
 
         # Authentication portal issues/validates tokens; requires a signing key
-        authentication portal myportal {
-          # Provide a signing key; read it from a credential file
-          crypto key sign-verify {file.{$AUTH_SIGN_KEY_FILE}}
-          enable identity provider google
-        }
+          authentication portal myportal {
+            # Provide a signing key from file
+            # TODO: caddy-security doesn't support {file.{$VAR}} syntax due to early parsing https://github.com/greenpau/caddy-security/issues/424
+            # Should be: {file.{$AUTH_SIGN_KEY_FILE}}
+            crypto key sign-verify {file./run/credentials/caddy.service/auth_sign_key}
+            enable identity provider google
+          }
 
         # Authorization policy: verify same key and set login URL
-        authorization policy mypolicy {
-          set auth url /auth
-          crypto key verify {file.{$AUTH_SIGN_KEY_FILE}}
-          allow email yonathan@gmail.com nosiri@gmail.com
-        }
+          authorization policy mypolicy {
+            set auth url /auth/
+            set redirect query parameter redirect_url
+            # TODO: caddy-security doesn't support {file.{$VAR}} syntax due to early parsing https://github.com/greenpau/caddy-security/issues/424
+            # Should be: {file.{$AUTH_SIGN_KEY_FILE}}
+            crypto key verify {file./run/credentials/caddy.service/auth_sign_key}
+            allow email yonathan@gmail.com nosiri@gmail.com
+          }
       }
     '';
     # https://caddyserver.com/docs/caddyfile/patterns#wildcard-certificates
