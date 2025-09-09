@@ -265,6 +265,75 @@
     openFirewall = true; # open 8096/8920
   };
 
+  # Constrain Jellyfin to a single read-only media path using systemd sandboxing.
+  # Expose your desired media directory at /srv/jellyfin-media inside the service
+  # and hide the rest of the storage roots.
+  systemd.tmpfiles.rules = [
+    # Ensure Jellyfin writable paths exist before namespacing
+    "d /var/lib/jellyfin 0750 jellyfin jellyfin -"
+    "d /var/cache/jellyfin 0750 jellyfin jellyfin -"
+    "d /var/log/jellyfin 0750 jellyfin jellyfin -"
+    # Bind target for media inside the sandbox
+    "d /srv/jellyfin-media 0755 jellyfin jellyfin -"
+  ];
+  systemd.services.jellyfin = {
+    after = [ "local-fs.target" ];
+    serviceConfig = {
+      # File-system lockdown: only write to state/cache/logs; media is read-only
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      ProtectControlGroups = true;
+      ProtectKernelLogs = true;
+      ProtectKernelModules = true;
+      ProtectKernelTunables = true;
+      RestrictSUIDSGID = true;
+      # Avoid JIT/CLR issues during startup
+      # LockPersonality and MemoryDenyWriteExecute disabled for .NET runtime
+      CapabilityBoundingSet = "";
+      AmbientCapabilities = "";
+      RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
+      ReadWritePaths = [ 
+        "/var/lib/jellyfin"
+        "/var/cache/jellyfin"
+        "/var/log/jellyfin"
+      ];
+      # Create standard state/cache/log directories with correct ownership
+      StateDirectory = "jellyfin";
+      CacheDirectory = "jellyfin";
+      LogsDirectory = "jellyfin";
+      # Bind the allowed media directory into a dedicated path inside the unit's namespace (read-only)
+      BindReadOnlyPaths = [ 
+        "/firstpool/family/media:/firstpool/family/media"
+      ];
+      TemporaryFileSystem = [
+        # “This is useful to hide files or directories not relevant to the processes invoked by the unit,
+        # while necessary files or directories can be still accessed
+        # by combining with BindPaths= or BindReadOnlyPaths=:”
+        # https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#TemporaryFileSystem=
+        "/firstpool"
+      ];
+      # Hide common storage roots to reduce what the service can see
+      InaccessiblePaths = [ 
+        "/home"
+        "/root"
+        "/mnt"
+        "-/Primary"
+        "-/Stuff"
+      ];
+      # Restrict device access: allow only GPU render/card for VAAPI
+      DevicePolicy = "closed";
+      DeviceAllow = [
+        # Allow all DRM (Direct Rendering Manager) character devices (e.g., /dev/dri/card*, /dev/dri/renderD*)
+        # DRM char devices use major 226; wildcard minor to cover cardN and renderDNN.
+        "char-226:* rw"
+      ];
+      # Keep access to standard pseudo devices granted by DevicePolicy=closed
+      # (/dev/null, /dev/zero, /dev/random, /dev/urandom, /dev/tty, etc.).
+    };
+  };
+
   # Hardware acceleration (VAAPI) for Jellyfin transcoding
   # Newer NixOS uses hardware.graphics (opengl options are deprecated)
   hardware.graphics = {
@@ -334,6 +403,26 @@
         }
 
         reverse_proxy 127.0.0.1:2283
+      }
+
+      @jellyfin host jellyfin.yonathan.org
+      handle @jellyfin {
+        # Rate limit only auth endpoints, then proxy everything
+        rate_limit {
+          zone auth_zone {
+            key {remote_host}
+            events 3
+            window 60s
+
+            # POST on specific auth endpoints
+            match {
+              method POST
+              path /Users/authenticatebyname
+            }
+          }
+        }
+
+        reverse_proxy 127.0.0.1:8096
       }
     '';
   };
