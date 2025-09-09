@@ -85,6 +85,19 @@ so that broadcom_sta module can load
   ssh yonran@yonnas.local -- sudo nixos-rebuild switch
   ```
 
+## Configure caddy
+
+To configure Let’s Encrypt ACME DNS-01 wildcard certificate,
+we need a CloudFlare token.
+
+Create a secret at https://dash.cloudflare.com/profile/api-tokens.
+
+```
+sudo mkdir -p /etc/secrets
+sudo systemd-creds encrypt --uid=0 - /etc/secrets/cloudflare_token.cred
+# (paste the token, then enter, then Ctrl+D)
+```
+
 ## Configure sb-exporter
 
 To configure the monitoring of the cable sb-exporter modem monitor,

@@ -288,35 +288,72 @@
     email = "yonathan@gmail.com"; # ACME contact
     # Build Caddy with the rate_limit plugin
     package = pkgs.caddy.withPlugins {
-      plugins = [ "github.com/mholt/caddy-ratelimit@v0.1.1-0.20250318145942-a8e9f68d7bed" ];
-      hash = "sha256-fGWEtofpGTaovOu+FL+Dx7k44T7ZsS4ThO6evaVCvIQ=";
+      plugins = [
+        "github.com/mholt/caddy-ratelimit@v0.1.1-0.20250318145942-a8e9f68d7bed"
+        "github.com/caddy-dns/cloudflare@v0.2.2-0.20250724223520-f589a18c0f5d"
+      ];
+      hash = "sha256-DNZgzSW5OnO0Dh1DO+4KYLB2eHCO1kmDdstIipGB5nU=";
     };
     # no global Caddyfile directives
     extraConfig = ''
     '';
-    virtualHosts."photos.yonathan.org".extraConfig = ''
-      # Compression and security headers
+    # https://caddyserver.com/docs/caddyfile/patterns#wildcard-certificates
+    # To verify the converted json (with {$ENV} expanded), run curl localhost:2019/config/
+    virtualHosts."*.yonathan.org".extraConfig = ''
+      # Obtain a wildcard certificate for *.yonathan.org using DNS-01
+      tls {
+        # caddy has 2 types of interpolation that differ in when they are evaluated
+        # apparently {file.{env.CLOUDFLARE_API_TOKEN_FILE}} does not work
+        dns cloudflare {file.{$CLOUDFLARE_API_TOKEN_FILE}}
+      }
       encode zstd gzip
       header {
         # Strict Transport Security (enable preload only if all subdomains are HTTPS)
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
       }
 
-      # Rate limit only auth endpoints, then proxy everything
-      rate_limit {
-        zone auth_zone {
-          match {
-            path /api/auth/* /api/auth/login /api/user/login
-          }
-          key {remote_host}
-          events 10
-          window 60s
-        }
-      }
+      @photos host photos.yonathan.org
+      handle @photos {
+        # Rate limit only auth endpoints, then proxy everything
+        rate_limit {
+          zone auth_zone {
+            key {remote_host}
+            events 3
+            window 60s
 
-      reverse_proxy 127.0.0.1:2283
+            # POST on specific auth endpoints
+            match {
+              method POST
+              path /api/auth/login /api/auth/admin-sign-up /api/auth/change-password /api/auth/session/unlock
+            }
+
+            # Any method on these endpoints
+            match { path /api/auth/pin-code }
+            match { path /api/shared-links/me }
+          }
+        }
+
+        reverse_proxy 127.0.0.1:2283
+      }
     '';
   };
+  # add a /etc/systemd/system/caddy.service.d/overrides.conf
+  systemd.services.caddy = {
+    # Provide Cloudflare API token via systemd credentials (TPM2-encrypted)
+    # 1) Create /etc/secrets/cloudflare_token.cred using `systemd-creds encrypt --tpm2 -n cloudflare_token.cred ...`
+    # 2) LoadCredentialEncrypted passes it to the service; systemd decrypts into $CREDENTIALS_DIRECTORY/cloudflare_token.cred
+    # 3) preStart writes an EnvironmentFile read by Caddy with the token value
+    serviceConfig.LoadCredentialEncrypted = [ "cloudflare_token.cred:/etc/secrets/cloudflare_token.cred" ];
+    # Use a dedicated runtime dir for caddy and place the envfile under $RUNTIME_DIRECTORY/caddy
+    serviceConfig.RuntimeDirectory = "caddy";
+    # Export the token directly from the decrypted credential into the environment
+    serviceConfig.Environment = ["CLOUDFLARE_API_TOKEN_FILE=\"%d/cloudflare_token.cred\""];
+  };
+
+  # Enable TPM2 userspace stack so systemd can decrypt TPM2-sealed credentials
+  # (doesn't work yet I don't think since sudo systemd-creds encrypt --tpm2-device --name=hi - -
+  # still gives warning “Credential secret file '/var/lib/systemd/credential.secret' is not located on encrypted media, using anyway.”)
+  security.tpm2.enable = true;
 
   # Enable sound.
   # sound.enable = true;
