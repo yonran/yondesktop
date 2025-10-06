@@ -4,10 +4,10 @@
 #   (do this within nix-shell -p git)
 #   nix --experimental-features 'nix-command flakes' build '.#darwinConfigurations.aarch64-darwin.default.system'
 #   # the following step may be needed to bootstrap 
-#   source ./result/sw/bin/darwin-rebuild activate --flake '.#aarch64-darwin.default'
-#   ./result/sw/bin/darwin-rebuild switch --flake '.#aarch64-darwin.default'
+#   source ./result/sw/bin/darwin-rebuild activate --flake '.#darwinConfigurations.aarch64-darwin.default.system'
+#   ./result/sw/bin/darwin-rebuild switch --flake '.#darwinConfigurations.aarch64-darwin.default.system'
 # once built, you can rebuild with
-#   darwin-rebuild switch --flake .#aarch64-darwin.default
+#   darwin-rebuild switch --flake .#darwinConfigurations.aarch64-darwin.default.system
 # https://github.com/LnL7/nix-darwin/tree/54a24f042f93c79f5679f133faddedec61955cf2#flakes-experimental
 
 # Previous instructions (pre-flakes)
@@ -46,8 +46,6 @@
   # $ darwin-rebuild switch -I darwin-config=$HOME/.config/nixpkgs/darwin/configuration.nix
   # environment.darwinConfig = "$HOME/.config/nixpkgs/darwin/configuration.nix";
 
-  # Auto upgrade nix package and the daemon service.
-  services.nix-daemon.enable = true;
   # nix.package = pkgs.nix;
 
   # Create /etc/bashrc that loads the nix-darwin environment.
@@ -69,7 +67,7 @@ auth       sufficient     pam_tid.so
 
   # see https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/misc/nix-daemon.nix
   # /etc/nix/nix.conf
-  nix.package = pkgs.nixUnstable; # required for experimental-features
+  nix.package = pkgs.nixVersions.latest; # other choices: nixVersions.git
   nix.extraOptions = ''
     # enable flakes
     # enable content-addressed derivations https://nixos.wiki/wiki/Ca-derivations
