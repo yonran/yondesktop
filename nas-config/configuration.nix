@@ -13,6 +13,14 @@
 
 { config, lib, pkgs, ... }:
 
+let
+  dvdbackup = pkgs.callPackage (pkgs.fetchFromGitHub {
+    owner = "yonran";
+    repo = "dvdbackup";
+    rev = "b42f1efe10bea9a412de5a34b0a8ebe86db70fe3";
+    sha256 = "sha256-fDAgFOGlL384a4s0GIzSFlkUSaGUUwzX+iJk3QsjBUg=";
+  }) {};
+in
 {
   imports =
     [ # Include the results of the hardware scan.
@@ -645,6 +653,7 @@
     docker-compose
     ntfs3g
     tmux
+    dvdbackup
   ];
 
   # Some programs need SUID wrappers, can be configured further or are
