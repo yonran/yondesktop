@@ -68,7 +68,6 @@ in {
     pkgs.nodejs_24
     # pkgs.ocrmypdf
     pkgs.nixfmt
-    pkgs.wifi-password
     pkgs.awscli2
     (pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
       extensions = [ "rust-src" ];
