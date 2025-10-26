@@ -730,11 +730,14 @@ in
   # extra udev rules which will be put in /etc/udev/rules.d/99-local.rules
   # for syntax see https://www.freedesktop.org/software/systemd/man/latest/udev.html
   # to list attributes of a device run sudo udevadm info -q all --attribute-walk /dev/sdd
+  # to list env properties of a device run udevadm info -q property -n /dev/sdd
   # To debug: sudo udevadm test -a add $(udevadm info -q path -n /dev/sda)
   services.udev.extraRules = ''
     # to debug these events: journalctl -eu systemd-udevd.service
-    SUBSYSTEM=="block", ATTR{partition}!="1", OPTIONS="log_level=debug"
-    # ATTR{partition}!="1": exclude partitions (e.g. sudo udevadm info -q all --attribute-walk /dev/sdd1)
+    SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", OPTIONS="log_level=debug"
+    # ENV{DEVTYPE}=="disk": match only whole disks, not partitions (DEVTYPE=partition)
+    #   DEVTYPE is set by the kernel in uevents (see sysfs(5) and /sys/block/*/uevent)
+    #   https://man7.org/linux/man-pages/man5/sysfs.5.html
     # ATTR{queue/rotational}=="1": match hard drives, exclude SSDs
     # TAG+="systemd": “systemd will dynamically create device units for all kernel devices that are marked with the "systemd" udev tag”
     #   https://www.freedesktop.org/software/systemd/man/latest/systemd.device.html
@@ -744,7 +747,7 @@ in
     #   https://www.freedesktop.org/software/systemd/man/latest/systemd.device.html
     # Note: you could have used "hdparm-set@%k.service", and then specify /dev/%I in the template file,
     # but SYSTEMD_WANTS supports this alternate method
-    ACTION=="add", SUBSYSTEM=="block", ATTR{partition}!="1", TAG+="hdparmset", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hdparm-set@%k.service"
+    ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", TAG+="hdparmset", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hdparm-set@%k.service"
   '';
   systemd.services."hdparm-set@" = {
     description = "Set hdparm -S 10 (sleep in 5s * 10) on newly added disks %I";
