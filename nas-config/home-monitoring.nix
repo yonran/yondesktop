@@ -42,8 +42,9 @@
       exporters = {
         node = {
           enable = true;
-          enabledCollectors = [ "systemd" ];
+          enabledCollectors = [ "systemd" "textfile" ];
           port = 9100;
+          extraFlags = [ "--collector.textfile.directory=/var/lib/prometheus-node-exporter-text" ];
         };
         smartctl = {
           enable = true;
@@ -288,5 +289,61 @@
       9115  # Blackbox exporter
       config.services.sb-exporter.metricsPort
     ];
+
+    # Create textfile collector directory
+    systemd.tmpfiles.rules = [
+      "d /var/lib/prometheus-node-exporter-text 0755 root root -"
+    ];
+
+    # Service to export drive power state metrics
+    systemd.services.hdparm-power-state-exporter = {
+      description = "Export drive power state to Prometheus";
+      path = [ pkgs.hdparm ];
+      script = ''
+        set -euo pipefail
+        TEXTFILE_DIR="/var/lib/prometheus-node-exporter-text"
+        OUTPUT="$TEXTFILE_DIR/hdparm_power_state.prom.$$"
+        FINAL="$TEXTFILE_DIR/hdparm_power_state.prom"
+
+        # Write metrics to temp file
+        {
+          echo "# HELP hdparm_drive_power_state Drive power state (0=standby, 1=active/idle, 2=unknown)"
+          echo "# TYPE hdparm_drive_power_state gauge"
+
+          for dev in /dev/sd[a-z]; do
+            [ -b "$dev" ] || continue
+            device=$(basename "$dev")
+
+            if state=$(hdparm -C "$dev" 2>/dev/null | grep 'drive state'); then
+              if echo "$state" | grep -q 'standby'; then
+                value=0
+              elif echo "$state" | grep -q 'active/idle'; then
+                value=1
+              else
+                value=2
+              fi
+              echo "hdparm_drive_power_state{device=\"$device\"} $value"
+            fi
+          done
+        } > "$OUTPUT"
+
+        # Atomic move
+        mv "$OUTPUT" "$FINAL"
+      '';
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+      };
+    };
+
+    # Timer to run every 30 seconds
+    systemd.timers.hdparm-power-state-exporter = {
+      description = "Timer for hdparm power state exporter";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "10s";
+        OnUnitActiveSec = "30s";
+      };
+    };
   };
 }
