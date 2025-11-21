@@ -20,6 +20,45 @@ let
     rev = "b42f1efe10bea9a412de5a34b0a8ebe86db70fe3";
     sha256 = "sha256-fDAgFOGlL384a4s0GIzSFlkUSaGUUwzX+iJk3QsjBUg=";
   }) {};
+
+  # Nov 16/19 logs show that when interface enp7s0u2u4 vanishes the TB controller is wedged in D3;
+  # specifically the journal emits "r8152 ... NETDEV WATCHDOG ... Tx timeout" followed by
+  # "r8152 4-2.4:1.0 enp7s0u2u4: Stop submitting intr, status -108" and all downstream "USB disconnect".
+  # This helper script performs the manual unbind/remove/rescan steps we otherwise run by hand to clear it.
+  resetThunderboltXhci = pkgs.writeShellScript "reset-thunderbolt-xhci" ''
+    set -euo pipefail
+    IFACE="enp7s0u2u4"
+    PCI_DEV="0000:07:00.0"
+
+    if ${pkgs.iproute2}/bin/ip link show "$IFACE" > /dev/null 2>&1; then
+      exit 0
+    fi
+
+    log() { printf '%s\n' "$1"; }
+
+    log "network interface $IFACE missing; resetting parent PCI device $PCI_DEV"
+
+    if [ -e "/sys/bus/pci/devices/$PCI_DEV" ]; then
+      if [ -w "/sys/bus/pci/drivers/xhci_hcd/unbind" ]; then
+        printf '%s\n' "$PCI_DEV" > "/sys/bus/pci/drivers/xhci_hcd/unbind" || true
+      fi
+      printf '1\n' > "/sys/bus/pci/devices/$PCI_DEV/remove"
+      sleep 2
+    fi
+
+    printf '1\n' > /sys/bus/pci/rescan
+    log "rescan of PCI bus triggered for recovery"
+
+    # Give udev a moment to re-enumerate devices; bail out if we already recovered.
+    sleep 5
+    if ${pkgs.iproute2}/bin/ip link show "$IFACE" > /dev/null 2>&1; then
+      log "interface $IFACE is back after PCI rescan"
+      exit 0
+    fi
+
+    log "recovery failed; rebooting to clear wedged Thunderbolt controller"
+    ${pkgs.systemd}/bin/systemctl reboot
+  '';
 in
 {
   imports =
@@ -748,11 +787,39 @@ in
     # Note: you could have used "hdparm-set@%k.service", and then specify /dev/%I in the template file,
     # but SYSTEMD_WANTS supports this alternate method
     ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", TAG+="hdparmset", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hdparm-set@%k.service"
+    # Prevent the Intel JHL6540 Thunderbolt controller (parent of the USB NIC/HDDs) from entering runtime D3.
+    # Without this, the logs show "pcieport 0000:05:04.0: Unable to change power state from D3hot to D0, device inaccessible"
+    # immediately followed by "xhci_hcd 0000:07:00.0: xHCI host controller not responding, assume dead".
+    ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x15d4", TEST=="power/control", ATTR{power/control}="on"
   '';
   systemd.services."hdparm-set@" = {
     description = "Set hdparm -S 10 (sleep in 5s * 10) on newly added disks %I";
     serviceConfig.Type = "oneshot";
     serviceConfig.ExecStart = "${pkgs.hdparm}/bin/hdparm -S 10 /dev/%I";
+  };
+
+  # As a backstop for the "r8152 ... Stop submitting intr, status -108" failure
+  # (which should be fixed by the udev rule for ATTR{vendor}=="0x8086", ATTR{device}=="0x15d4"),
+  # run the recovery script as a oneshot whenever the timer fires
+  # and finds the NIC missing.
+  systemd.services.reset-thunderbolt-xhci = {
+    description = "Reset Thunderbolt-attached XHCI when USB NIC disappears";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = resetThunderboltXhci;
+    };
+  };
+
+  # Periodically check so the service notices as soon as the watchdog errors / "Pool 'firstpool' has encountered an uncorrectable I/O failure"
+  # sequence begins; the service exits immediately when healthy, so this just provides fast auto-heal without a reboot.
+  systemd.timers.reset-thunderbolt-xhci = {
+    description = "Periodic check to auto-recover Thunderbolt USB stack";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2min";
+      OnUnitActiveSec = "1min";
+      AccuracySec = "30s";
+    };
   };
 
   services.owntracks-recorder.enable = true;
