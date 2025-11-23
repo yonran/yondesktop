@@ -294,26 +294,6 @@ in
         "recycle:exclude" = "*.tmp,*.temp,~$*";
         "recycle:exclude_dir" = ".recycle";
       };
-      "private" = {
-        # smbpasswd -a username
-        "path" = "/firstpool/family/privateshare";
-        "browseable" = "yes";
-        "read only" = "no";
-        "guest ok" = "no";
-        "create mask" = "0644";
-        "directory mask" = "0755";
-        "force user" = "yonran";
-        "force group" = "users";
-        # Recycle bin for safe deletes
-        "vfs objects" = "recycle";
-        "recycle:repository" = ".recycle";
-        "recycle:keeptree" = "yes";
-        "recycle:versions" = "yes";
-        "recycle:touch" = "yes";
-        "recycle:touch_mtime" = "no";
-        "recycle:exclude" = "*.tmp,*.temp,~$*";
-        "recycle:exclude_dir" = ".recycle";
-      };
       # Additional user shares within /firstpool/family
       "yonran" = {
         "path" = "/firstpool/family/yonran";
