@@ -21,38 +21,63 @@ let
     sha256 = "sha256-fDAgFOGlL384a4s0GIzSFlkUSaGUUwzX+iJk3QsjBUg=";
   }) {};
 
-  # Nov 16/19 logs show that when interface enp7s0u2u4 vanishes the TB controller is wedged in D3;
-  # specifically the journal emits "r8152 ... NETDEV WATCHDOG ... Tx timeout" followed by
-  # "r8152 4-2.4:1.0 enp7s0u2u4: Stop submitting intr, status -108" and all downstream "USB disconnect".
-  # This helper script performs the manual unbind/remove/rescan steps we otherwise run by hand to clear it.
+  # 2025-11-16/2025-11-19/2025-11-23/2025-11-24/2025-11-25 logs show that when interface enp7s0u2u4 vanishes the TB chain is wedged in
+  # runtime power-management: the root ports (0000:05:04.0/05:01.0) first report
+  # "Unable to change power state from D3hot to D0, device inaccessible", then the USB NIC follows with
+  # "r8152 ... NETDEV WATCHDOG ... Tx timeout"/"Stop submitting intr, status -108" and finally the XHCI dies.
+  # Forcing only the child XHCI out of D3 (previous attempt) didn't help because the parent bridges had
+  # already removed the entire hierarchy. This helper script now reproduces the manual rescue sequence:
+  # toggle Thunderbolt authorization (as if we replugged the dock), forcibly remove the failing bridges
+  # plus the XHCI function, and rescan PCI before giving up and rebooting.
   resetThunderboltXhci = pkgs.writeShellScript "reset-thunderbolt-xhci" ''
+    #!${pkgs.bash}/bin/bash
     set -euo pipefail
     IFACE="enp7s0u2u4"
-    PCI_DEV="0000:07:00.0"
+    XHCI_DEV="0000:07:00.0"
+    ROOT_PORTS=(0000:05:04.0 0000:05:02.0 0000:05:01.0)
 
-    if ${pkgs.iproute2}/bin/ip link show "$IFACE" > /dev/null 2>&1; then
-      exit 0
-    fi
+    shopt -s nullglob
+    TB_NODES=(/sys/bus/thunderbolt/devices/*-*)
+
+    nic_up() {
+      ${pkgs.iproute2}/bin/ip link show "$IFACE" > /dev/null 2>&1
+    }
 
     log() { printf '%s\n' "$1"; }
 
-    log "network interface $IFACE missing; resetting parent PCI device $PCI_DEV"
-
-    if [ -e "/sys/bus/pci/devices/$PCI_DEV" ]; then
-      if [ -w "/sys/bus/pci/drivers/xhci_hcd/unbind" ]; then
-        printf '%s\n' "$PCI_DEV" > "/sys/bus/pci/drivers/xhci_hcd/unbind" || true
-      fi
-      printf '1\n' > "/sys/bus/pci/devices/$PCI_DEV/remove"
-      sleep 2
+    if nic_up; then
+      exit 0
     fi
 
-    printf '1\n' > /sys/bus/pci/rescan
-    log "rescan of PCI bus triggered for recovery"
+    log "network interface $IFACE missing; attempting Thunderbolt reset sequence"
 
-    # Give udev a moment to re-enumerate devices; bail out if we already recovered.
-    sleep 5
-    if ${pkgs.iproute2}/bin/ip link show "$IFACE" > /dev/null 2>&1; then
-      log "interface $IFACE is back after PCI rescan"
+    reset_tb_bus=false
+    for node in "''${TB_NODES[@]}"; do
+      if [ -w "$node/authorized" ]; then
+        reset_tb_bus=true
+        log "toggling Thunderbolt authorization on $(basename "$node")"
+        printf '0\n' > "$node/authorized" || true
+        sleep 1
+        printf '1\n' > "$node/authorized" || true
+      fi
+    done
+    $reset_tb_bus && sleep 2
+
+    for dev in "''${ROOT_PORTS[@]}" "$XHCI_DEV"; do
+      if [ -e "/sys/bus/pci/devices/$dev" ]; then
+        log "removing PCI function $dev"
+        printf '%s\n' "$dev" > "/sys/bus/pci/devices/$dev/remove" || true
+      fi
+    done
+
+    sleep 2
+    printf '1\n' > /sys/bus/pci/rescan
+    log "PCI rescan triggered for Thunderbolt hierarchy"
+
+    # Give udev time to rebuild the USB tree before deciding the recovery failed.
+    sleep 8
+    if nic_up; then
+      log "interface $IFACE returned after Thunderbolt reset"
       exit 0
     fi
 
@@ -771,6 +796,9 @@ in
     # Without this, the logs show "pcieport 0000:05:04.0: Unable to change power state from D3hot to D0, device inaccessible"
     # immediately followed by "xhci_hcd 0000:07:00.0: xHCI host controller not responding, assume dead".
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x15d4", TEST=="power/control", ATTR{power/control}="on"
+    # The Nov 23/24/25 failures showed the bridges (05:01/05:02/05:04, vendor 0x8086/device 0x15d3) hit D3hot first,
+    # so force them to stay "on" too; otherwise the XHCI fix alone has no effect because the parent bus vanishes.
+    ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x15d3", TEST=="power/control", ATTR{power/control}="on"
   '';
   systemd.services."hdparm-set@" = {
     description = "Set hdparm -S 10 (sleep in 5s * 10) on newly added disks %I";
@@ -778,10 +806,9 @@ in
     serviceConfig.ExecStart = "${pkgs.hdparm}/bin/hdparm -S 10 /dev/%I";
   };
 
-  # As a backstop for the "r8152 ... Stop submitting intr, status -108" failure
-  # (which should be fixed by the udev rule for ATTR{vendor}=="0x8086", ATTR{device}=="0x15d4"),
-  # run the recovery script as a oneshot whenever the timer fires
-  # and finds the NIC missing.
+  # As a backstop for the "r8152 ... Stop submitting intr, status -108" failure this service invokes the
+  # recovery script whenever the timer detects the NIC is missing. Earlier versions simply removed the
+  # XHCI device and rebooted; the new script does the more complete Thunderbolt reset described above.
   systemd.services.reset-thunderbolt-xhci = {
     description = "Reset Thunderbolt-attached XHCI when USB NIC disappears";
     serviceConfig = {
