@@ -168,7 +168,12 @@ in
   systemd.services.podman-immich-database = {
     requires = [ "firstpool-family.mount" "network-online.target" ];
     after = [ "firstpool-family.mount" "network-online.target" ];
+    # when immich-stack is stopped or when firstpool/family is unmounted,
+    # then stop immich-database
     partOf = [ "immich-stack.target" "firstpool-family.mount" ];
+    # when immich-stack is started or when firstpool/family is mounted,
+    # then start immich-database
+    wantedBy = [ "immich-stack.target" "firstpool-family.mount" ];
     unitConfig.RequiresMountsFor = "/firstpool/family";
     # https://github.com/NixOS/nixpkgs/blob/nixos-25.05/nixos/modules/virtualisation/oci-containers.nix#L565
     
@@ -185,18 +190,21 @@ in
     requires = [ "firstpool-family.mount" "network-online.target" ];
     after = [ "firstpool-family.mount" "network-online.target" ];
     partOf = [ "immich-stack.target" "firstpool-family.mount" ];
+    wantedBy = [ "immich-stack.target" "firstpool-family.mount" ];
     unitConfig.RequiresMountsFor = "/firstpool/family";
   };
 
   systemd.services.podman-immich-machine-learning = {
     requires = [ "network-online.target" ];
     after = [ "network-online.target" ];
+    wantedBy = [ "immich-stack.target" ];
     partOf = [ "immich-stack.target" ];
   };
 
   systemd.services.podman-immich-redis = {
     requires = [ "network-online.target" ];
     after = [ "network-online.target" ];
+    wantedBy = [ "immich-stack.target" ];
     partOf = [ "immich-stack.target" ];
   };
 
