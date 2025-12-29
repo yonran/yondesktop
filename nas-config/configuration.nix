@@ -153,6 +153,11 @@ in
   # ZFS is not needed during early boot and this flag is recommended to be off
   # (https://openzfs.github.io/openzfs-docs/Getting%20Started/NixOS/)
   boot.zfs.forceImportRoot = false;
+
+  # Load software watchdog module (softdog) for system hang protection
+  # Intel TCO hardware watchdog isn't available on this MacBook Pro hardware,
+  # so we use softdog which provides kernel-level watchdog functionality
+  boot.kernelModules = [ "softdog" ];
   # hostId is written to /etc/hostid.
   # It should be unique among your computers so that zfs import gives an error
   # when you zfs import a zpool to another computer without exporting it first.
@@ -406,6 +411,16 @@ in
     # Bind target for media inside the sandbox
     "d /srv/jellyfin-media 0755 jellyfin jellyfin -"
   ];
+
+  # Hardware watchdog configuration to auto-reboot on kernel hangs/freezes
+  # Uses Intel TCO (Timer/Watchdog) hardware watchdog (iTCO_wdt module)
+  # This will catch ZFS hangs, kernel panics, and complete system freezes
+  # that the USB NIC watchdog (reset-thunderbolt-xhci) cannot detect
+  systemd.watchdog = {
+    runtimeTime = "30s";   # Ping watchdog every 30 seconds during normal operation
+    rebootTime = "2min";   # Wait 2 minutes before forcing reboot if system doesn't respond
+  };
+
   systemd.services.jellyfin = {
     requires = [ "firstpool-family.mount" ];
     after = [ "firstpool-family.mount" "local-fs.target" ];
