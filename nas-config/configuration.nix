@@ -488,14 +488,21 @@ in
   services.caddy = {
     enable = true;
     email = "yonathan@gmail.com"; # ACME contact
-    # Build Caddy with the rate_limit plugin
+    # Build Caddy with plugins
+    # NOTE: pkgs.caddy.withPlugins and the hash below are specific to:
+    #   NixOS version: 25.05.813768.fd0ca39c92fd (Warbler)
+    #   nixpkgs commit: fd0ca39c92fd
+    # To regenerate hash after updating NixOS/nixpkgs:
+    #   1. Set hash to "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    #   2. Run: sudo nixos-rebuild build 2>&1 | grep -A3 'hash mismatch'
+    #   3. Update hash with the value shown in "got:"
     package = pkgs.caddy.withPlugins {
       plugins = [
-        "github.com/mholt/caddy-ratelimit@v0.1.1-0.20250318145942-a8e9f68d7bed"
-        "github.com/caddy-dns/cloudflare@v0.2.2-0.20250724223520-f589a18c0f5d"
+        "github.com/mholt/caddy-ratelimit@v0.1.1-0.20250915152450-04ea34edc0c4"
+        "github.com/caddy-dns/cloudflare@v0.2.3-0.20251204174556-6dc1fbb7e925"
         "github.com/greenpau/caddy-security@v1.1.31"
       ];
-      hash = "sha256-n9tslwOhZTjP1OWPMt7rZJJ/aojHQmUNUZVlZopEvNk=";
+      hash = "sha256-Qw17KK2Og3/hHGKcVYGRnaDLXBBo4+xlSpPei4doyvg=";
     };
     # Global Caddyfile (must be first). Use globalConfig to emit it at top.
     globalConfig = ''
