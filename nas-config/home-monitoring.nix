@@ -1,5 +1,18 @@
 { config, lib, pkgs, ... }:
 
+let
+  # Use custom smartctl_exporter fork with smartctl_device_power_mode metric support
+  # https://github.com/prometheus-community/smartctl_exporter/pull/327
+  smartctl_exporter_custom = pkgs.prometheus-smartctl-exporter.overrideAttrs (oldAttrs: {
+    src = pkgs.fetchFromGitHub {
+      owner = "yonran";
+      repo = "smartctl_exporter";
+      rev = "0c1f17adc47b9b73c017def8461adf12b5d54125";
+      sha256 = "kpaWbtZNZ8Dr0JJ/G7o5OHrXz6zwxkk0DkKco9NeMHE="; # lib.fakeHash;
+    };
+    vendorHash = "sha256-BvOvZNwhij/hYOfbi3dUNKwS77Mumkk8e/aD0bOmeis=";
+  });
+in
 {
   imports = [
     ./sb-exporter-service.nix
@@ -42,9 +55,8 @@
       exporters = {
         node = {
           enable = true;
-          enabledCollectors = [ "systemd" "textfile" ];
+          enabledCollectors = [ "systemd" ];
           port = 9100;
-          extraFlags = [ "--collector.textfile.directory=/var/lib/prometheus-node-exporter-text" ];
         };
         smartctl = {
           enable = true;
@@ -290,138 +302,12 @@
       config.services.sb-exporter.metricsPort
     ];
 
-    # Create textfile collector directory
-    systemd.tmpfiles.rules = [
-      "d /var/lib/prometheus-node-exporter-text 0755 root root -"
-    ];
-
-    # Python script for hdparm power state exporter
-    environment.etc."hdparm-exporter.py" = {
-      mode = "0755";
-      text = ''
-        #!/usr/bin/env python3
-        import json
-        import subprocess
-        import glob
-        import sys
-        import os
-        import tempfile
-
-        def get_power_state(device):
-            """Get hdparm power state: 0=standby, 1=active/idle, 2=unknown"""
-            try:
-                result = subprocess.run(
-                    ['hdparm', '-C', device],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                output = result.stdout
-                if 'standby' in output:
-                    return 0
-                elif 'active/idle' in output:
-                    return 1
-                return 2
-            except Exception:
-                return 2
-
-        def get_smartctl_labels(device):
-            """Get device labels matching smartctl_exporter's metricDeviceModel"""
-            try:
-                result = subprocess.run(
-                    ['smartctl', '-j', '-i', device],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                info = json.loads(result.stdout)
-            except Exception:
-                info = {}
-
-            # Extract labels in the same order as smartctl_exporter
-            labels = {
-                'interface': info.get('device', {}).get('type', 'sat'),
-                'protocol': info.get('protocol', 'ATA'),
-                'model_family': info.get('model_family', 'unknown'),
-                'model_name': info.get('model_name', 'unknown'),
-                'serial_number': info.get('serial_number', 'unknown'),
-                'ata_additional_product_id': info.get('ata_additional_product_id', 'unknown'),
-                'firmware_version': info.get('firmware_version', 'unknown'),
-                'ata_version': info.get('ata_version', {}).get('string', ''),
-                'sata_version': info.get('sata_version', {}).get('string', ''),
-                'form_factor': info.get('form_factor', {}).get('name', ''),
-                'scsi_vendor': info.get('scsi_vendor', ''),
-                'scsi_product': info.get('scsi_product', ''),
-                'scsi_revision': info.get('scsi_revision', ''),
-                'scsi_version': info.get('scsi_version', ''),
-            }
-            return labels
-
-        def format_labels(device, labels):
-            """Format labels for Prometheus metric"""
-            all_labels = {'device': device}
-            all_labels.update(labels)
-
-            # Escape quotes and backslashes in label values
-            escaped = {k: str(v).replace('\\', '\\\\').replace('"', '\\"')
-                      for k, v in all_labels.items()}
-
-            label_str = ','.join(f'{k}="{v}"' for k, v in escaped.items())
-            return label_str
-
-        def main():
-            textfile_dir = '/var/lib/prometheus-node-exporter-text'
-
-            # Write to temp file then atomic move
-            fd, temp_path = tempfile.mkstemp(dir=textfile_dir, prefix='hdparm_power_state.prom.')
-
-            try:
-                with os.fdopen(fd, 'w') as f:
-                    f.write('# HELP hdparm_drive_power_state Drive power state (0=standby, 1=active/idle, 2=unknown)\n')
-                    f.write('# TYPE hdparm_drive_power_state gauge\n')
-
-                    for device_path in sorted(glob.glob('/dev/sd[a-z]')):
-                        device = os.path.basename(device_path)
-                        power_state = get_power_state(device_path)
-                        labels = get_smartctl_labels(device_path)
-                        label_str = format_labels(device, labels)
-
-                        f.write(f'hdparm_drive_power_state{{{label_str}}} {power_state}\n')
-
-                # Atomic move
-                os.rename(temp_path, os.path.join(textfile_dir, 'hdparm_power_state.prom'))
-            except Exception:
-                # Clean up temp file on error
-                try:
-                    os.unlink(temp_path)
-                except Exception:
-                    pass
-                raise
-
-        if __name__ == '__main__':
-            main()
-      '';
-    };
-
-    # Service to export drive power state metrics
-    systemd.services.hdparm-power-state-exporter = {
-      description = "Export drive power state to Prometheus";
-      path = [ pkgs.hdparm pkgs.smartmontools pkgs.python3 ];
-      script = "${pkgs.python3}/bin/python3 /etc/hdparm-exporter.py";
+    # Override smartctl exporter to use custom fork with power_mode metric
+    systemd.services.prometheus-smartctl-exporter = {
       serviceConfig = {
-        Type = "oneshot";
-        User = "root";
+        ExecStart = lib.mkForce "${smartctl_exporter_custom}/bin/smartctl_exporter --web.listen-address=0.0.0.0:${toString config.services.prometheus.exporters.smartctl.port} --smartctl.interval=${config.services.prometheus.exporters.smartctl.maxInterval}";
       };
     };
 
-    # Timer to run every 30 seconds
-    systemd.timers.hdparm-power-state-exporter = {
-      description = "Timer for hdparm power state exporter";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnBootSec = "10s";
-        OnUnitActiveSec = "30s";
-      };
-    };
   };
 }
