@@ -823,9 +823,9 @@ in
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x15d3", TEST=="power/control", ATTR{power/control}="on"
   '';
   systemd.services."hdparm-set@" = {
-    description = "Set hdparm -S 10 (sleep in 5s * 10) on newly added disks %I";
+    description = "Set hdparm -S 120 (sleep after 10 minutes) on newly added disks %I";
     serviceConfig.Type = "oneshot";
-    serviceConfig.ExecStart = "${pkgs.hdparm}/bin/hdparm -S 10 /dev/%I";
+    serviceConfig.ExecStart = "${pkgs.hdparm}/bin/hdparm -S 120 /dev/%I";
   };
 
   # As a backstop for the "r8152 ... Stop submitting intr, status -108" failure this service invokes the
