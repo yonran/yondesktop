@@ -241,7 +241,11 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  fileSystems."/stuff" = { device = "/dev/disk/by-uuid/508E-0B16"; options = ["noatime" "nofail"]; };
+  # This WD Caviar Green (WD10EADS) drive doesn't properly support the ATA STANDBY TIMER command (hdparm -S),
+  # even though manual standby (hdparm -y) works immediately
+  # and even though other drives in the same TDAS TerraMaster USB enclosure support hdparm -S.
+  # So do not mount it by default.
+  fileSystems."/stuff" = { device = "/dev/disk/by-uuid/508E-0B16"; options = ["noatime" "nofail" "noauto"]; };
   fileSystems."/Primary" = { device = "/dev/disk/by-uuid/0AB088281A56593B"; options = ["noatime" "nofail"]; };
 
   networking.hostName = "yonnas"; # Define your hostname. 
