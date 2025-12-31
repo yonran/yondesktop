@@ -96,6 +96,19 @@ in
       ./modules/immich.nix
       ./modules/monitoring-scripts.nix
     ];
+  # TCP performance tuning for high-latency connections
+  # Bandwidth-delay product calculation:
+  #   RTT to SF: 52ms = 0.052s
+  #   Upload capacity: 42.77 Mbps ÷ 8 = 5.35 MB/s
+  #   Required buffer = bandwidth × delay = 5.35 MB/s × 0.052s = 278 KB
+  # Set to 512KB for headroom and congestion handling
+  boot.kernel.sysctl = {
+    "net.core.rmem_max" = 524288;          # 512KB max receive buffer
+    "net.core.wmem_max" = 524288;          # 512KB max send buffer
+    "net.ipv4.tcp_rmem" = "4096 131072 524288";  # min default max
+    "net.ipv4.tcp_wmem" = "4096 131072 524288";  # min default max
+  };
+
   # enable zfs-backup-module
   services.zfsBackup = {
     enable = true;
