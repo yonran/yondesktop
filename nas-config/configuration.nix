@@ -84,6 +84,16 @@ let
     log "recovery failed; rebooting to clear wedged Thunderbolt controller"
     ${pkgs.systemd}/bin/systemctl reboot
   '';
+
+  hdparmSetScript = pkgs.writeShellScript "hdparm-set" ''
+    DEVICE="$1"
+    # Check if APM is supported, set it if so
+    if ! ${pkgs.hdparm}/bin/hdparm -B "$DEVICE" 2>&1 | grep -q "not supported"; then
+      ${pkgs.hdparm}/bin/hdparm -B 127 "$DEVICE"
+    fi
+    # Always set sleep timer
+    ${pkgs.hdparm}/bin/hdparm -S 120 "$DEVICE"
+  '';
 in
 {
   imports =
@@ -840,9 +850,9 @@ in
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x15d3", TEST=="power/control", ATTR{power/control}="on"
   '';
   systemd.services."hdparm-set@" = {
-    description = "Set hdparm -S 120 (sleep after 10 minutes) on newly added disks %I";
+    description = "Set hdparm -S 120 (sleep after 10 minutes) and -B 127 (APM) on newly added disks %I";
     serviceConfig.Type = "oneshot";
-    serviceConfig.ExecStart = "${pkgs.hdparm}/bin/hdparm -S 120 /dev/%I";
+    serviceConfig.ExecStart = "${hdparmSetScript} /dev/%I";
   };
 
   # As a backstop for the "r8152 ... Stop submitting intr, status -108" failure this service invokes the
