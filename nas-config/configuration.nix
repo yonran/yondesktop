@@ -106,17 +106,23 @@ in
       ./modules/immich.nix
       ./modules/monitoring-scripts.nix
     ];
-  # TCP performance tuning for high-latency connections
-  # Bandwidth-delay product calculation:
-  #   RTT to SF: 52ms = 0.052s
-  #   Upload capacity: 42.77 Mbps ÷ 8 = 5.35 MB/s
-  #   Required buffer = bandwidth × delay = 5.35 MB/s × 0.052s = 278 KB
-  # Set to 512KB for headroom and congestion handling
+  # Socket buffer tuning for TCP over high-latency links
+  #
+  # Bandwidth-delay product: 52ms RTT × 5.35 MB/s upload = 278 KB minimum buffer.
+  # Before tuning (131KB default): 400 KB/s. After (512KB+): 5 MB/s.
+  # Test: ssh home.yonathan.org "dd if=/dev/zero bs=1M count=100" | dd of=/dev/null bs=1M
+  #
+  # Also set to 8MB for QUIC (quic-go wants 7MB per
+  # https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes).
+  # If too small, Caddy logs (see journalctl -u caddy):
+  # “failed to increase receive buffer size (wanted: 7168 kiB, got XXX kiB)”
   boot.kernel.sysctl = {
-    "net.core.rmem_max" = 524288;          # 512KB max receive buffer
-    "net.core.wmem_max" = 524288;          # 512KB max send buffer
-    "net.ipv4.tcp_rmem" = "4096 131072 524288";  # min default max
-    "net.ipv4.tcp_wmem" = "4096 131072 524288";  # min default max
+    "net.core.rmem_max" = 8388608;         # 8MB max for all sockets (inc. TCP and UDP/QUIC)
+    "net.core.wmem_max" = 8388608;         # 8MB max for all sockets
+    "net.core.rmem_default" = 1048576;     # 1MB default for UDP (TCP uses tcp_rmem)
+    "net.core.wmem_default" = 1048576;     # 1MB default for UDP (TCP uses tcp_wmem)
+    "net.ipv4.tcp_rmem" = "4096 131072 8388608";  # TCP-specific: min default max
+    "net.ipv4.tcp_wmem" = "4096 131072 8388608";  # TCP-specific: min default max
   };
 
   # enable zfs-backup-module
@@ -549,6 +555,15 @@ in
     # Global Caddyfile (must be first). Use globalConfig to emit it at top.
     globalConfig = ''
       debug
+      # Disable HTTP/3 (QUIC) due to poor performance on high-latency links.
+      # quic-go's loss detection (RFC 9002) interprets packet reordering as loss,
+      # causing congestion control to back off and limiting throughput to ~35% of TCP.
+      # See: https://github.com/quic-go/quic-go/issues/5325
+      # With http2, we get 5MB/s downloading from Comcast Seattle to Comcast SF.
+      # With http3, we only get 1MB/s (even with wmem_max)
+      servers {
+        protocols h1 h2
+      }
       # Ensure plugin directives order well
       order authenticate before respond
       order authorize before reverse_proxy
