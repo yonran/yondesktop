@@ -202,6 +202,7 @@ in
     allowedTCPPorts = [
       1883 # mosquitto mqtt
       8083 # owntracks-recorder ot-recorder
+      8123 # home-assistant
     ];
   };
 
@@ -528,6 +529,23 @@ in
   };
   users.users.jellyfin.extraGroups = [ "video" "render" ];
 
+  # Home Assistant - home automation platform
+  # - Listens on 8123 (HTTP)
+  # - Config stored in /var/lib/hass for persistence
+  # - Access via Caddy reverse proxy at homeassistant.yonathan.org
+  services.home-assistant = {
+    enable = true;
+    # Use imperative configuration (configuration.yaml in /var/lib/hass)
+    # Set to null to use the default /var/lib/hass directory
+    config = null;
+    extraComponents = [
+      # Common integrations you might want
+      "met"  # Weather
+      "mobile_app"  # Mobile app support
+      "zeroconf"  # Auto-discovery
+      "sun"  # Sun position
+    ];
+  };
 
   # Enable CUPS to print documents.
   # services.printing.enable = true;
@@ -658,6 +676,27 @@ in
       @grafana host grafana.yonathan.org
       handle @grafana {
         reverse_proxy 127.0.0.1:3000
+      }
+
+      # Home Assistant
+      @homeassistant host homeassistant.yonathan.org
+      handle @homeassistant {
+        # Rate limit auth endpoints to prevent brute force
+        rate_limit {
+          zone auth_zone {
+            key {remote_host}
+            events 5
+            window 60s
+
+            # POST on auth endpoints
+            match {
+              method POST
+              path /auth/login_flow*
+            }
+          }
+        }
+
+        reverse_proxy 127.0.0.1:8123
       }
 
       # Prometheus behind OIDC SSO (Google) using caddy-security
