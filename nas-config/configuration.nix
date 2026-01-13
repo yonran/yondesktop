@@ -94,6 +94,13 @@ let
     # Always set sleep timer
     ${pkgs.hdparm}/bin/hdparm -S 120 "$DEVICE"
   '';
+
+  # Dyson integration for Home Assistant
+  libdyson-neon = pkgs.home-assistant.python.pkgs.callPackage ./libdyson-neon.nix { };
+  dyson-ha = pkgs.callPackage ./dyson-ha.nix {
+    buildHomeAssistantComponent = pkgs.buildHomeAssistantComponent;
+    inherit libdyson-neon;
+  };
 in
 {
   imports =
@@ -533,17 +540,29 @@ in
   # - Listens on 8123 (HTTP)
   # - Config stored in /var/lib/hass for persistence
   # - Access via Caddy reverse proxy at homeassistant.yonathan.org
+  # - HACS (Home Assistant Community Store) auto-installed for custom integrations
   services.home-assistant = {
     enable = true;
-    # Use imperative configuration (configuration.yaml in /var/lib/hass)
-    # Set to null to use the default /var/lib/hass directory
-    config = null;
+    # Configure to work with Caddy reverse proxy
+    config = {
+      default_config = {};
+      http = {
+        use_x_forwarded_for = true;
+        trusted_proxies = [ "127.0.0.1" "::1" ];
+        # Allow access from reverse proxy
+        server_host = "127.0.0.1";
+      };
+    };
     extraComponents = [
       # Common integrations you might want
       "met"  # Weather
       "mobile_app"  # Mobile app support
       "zeroconf"  # Auto-discovery
       "sun"  # Sun position
+    ];
+    # Custom components
+    customComponents = [
+      dyson-ha
     ];
   };
 
