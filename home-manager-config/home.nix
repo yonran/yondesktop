@@ -63,6 +63,7 @@ in {
     pkgs.sbt
     pkgs.openjdk17
     pkgs.visualvm
+    pkgs.tmux
     pkgs.jq
     pkgs.gh
     pkgs.nodejs_24
