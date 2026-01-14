@@ -10,7 +10,6 @@
 
 let
   inherit (pkgs) lorri;
-  sequelace = pkgs.callPackage ./sequelace.nix {};
 in {
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
@@ -33,42 +32,20 @@ in {
   home.packages = [
     # bash history
     pkgs.atuin
-    # pkgs.python3
+    pkgs.codex
+    pkgs.python3
     pkgs.direnv # for lorri
     pkgs.git
     pkgs.ripgrep
     # pkgs.ripgrep-all
     pkgs.fd
-    pkgs.google-cloud-sdk
-    pkgs.sbt
-    pkgs.openjdk17
-    pkgs.visualvm
     pkgs.tmux
     pkgs.jq
     pkgs.gh
     pkgs.nodejs_24
-    # pkgs.ocrmypdf
     pkgs.nixfmt
-    pkgs.awscli2
-    (pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
-      extensions = [ "rust-src" ];
-    }))
-    # proprietary ssm-session-manager-plugin is needed for
-    # aws aws ssm start-session --region=us-west-2 --target=i-…
-    pkgs.ssm-session-manager-plugin
-    lorri
     # for getting the sha256 of fetchFromGitHub
     pkgs.nix-prefetch-github
-    # pkgs.myawscli2
-    # pkgs.mypackages
-    # pkgs.python3.pkgs.jsonschema
-    # (pkgs.python3.withPackages (p: [])).env
-    sequelace
-    # temporarily install go globally until vscode-go
-    # handles direnv properly
-    # https://github.com/golang/vscode-go/issues/2617
-    pkgs.go
-    pkgs.gopls
   ];
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
@@ -172,17 +149,6 @@ in {
   '';
 
   launchd.enable = true;
-  launchd.agents.lorri = {
-    enable = true;
-    config = {
-      # since lorri does not support on-demand launching on MacOS
-      # using launchd_activate_socket(),
-      # we have to hard-code the paths and KeepAlive always
-      KeepAlive = true;
-      RunAtLoad = true;
-      ProgramArguments = ["${lorri}/bin/lorri" "daemon"];
-    };
-  };
 
 
   # Create Grafana configuration directory and file
@@ -212,8 +178,6 @@ in {
         "-config" "${config.xdg.configHome}/grafana/grafana.ini"
       ];
       EnvironmentVariables = {
-        AWS_SDK_LOAD_CONFIG= "1"; # load ~/.aws/config
-        AWS_PROFILE = "say";
       };
       KeepAlive = true;
       RunAtLoad = true;
