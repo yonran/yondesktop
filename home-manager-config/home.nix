@@ -210,16 +210,11 @@ in {
   targets.darwin.defaults.finder.AppleShowAllExtensions = true;
   targets.darwin.defaults.dock.orientation = "right";
 
-  home.activation.darwinKeyboardShortcuts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    # Settings -> Keyboard -> Shortcuts -> App Shortcuts
-    # @=⌘, ~=⌥Option ^=Control, $=⇧Shift
-    run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Move Window to Left Side of Screen" '@^\U2190'
-    run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Move Window to Right Side of Screen" '@^\U2192'
-    # Catalina hover on green full-screen button https://support.apple.com/en-us/HT204948
-    run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Tile Window to Left of Screen" '@~^\U2190'
-    run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Tile Window to Right of Screen" '@~^\U2192'
-  '';
   targets.darwin.defaults."com.apple.menuextra.clock".ShowSeconds = true;
+
+  home.file.".ssh/authorized_keys".text = ''
+    ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDqxHb38PL4CRl7bbYqeQ1ekXRX45iNo9/Ocsel5ar5AH31Va0fD2iBBtV22I/tHcIv4PrGX2vbTiumeG/oTLjThcQFZkqXthFnbDYeJ8+3fdeM9LcRcbt2G1vZmn+9hOSHNWAvfufpEgahHiZjJKOTIkKvhcNOGwsGh4CX+CZ7Vp3xq+tAaHTggczpJOzEPzfH/sBgXWA9+4v7eA+Kgw0Qu+Tkm2jZZjhyRD+PKie2UbodqZpI11rmCGFbS41ftA+kpcdy1QkS/Fa76uLSsW/3ejaKCcmVQKIZlOSJFWS48GEqr+SbWP1RA9FWiR9BpfOpE6S8oRylYzrZBOlEnKn pixel 6 phone
+  '';
 
   home.sessionPath = [
     "${config.home.homeDirectory}/.npm/bin"
