@@ -32,27 +32,7 @@ in {
 
   home.packages = [
     # bash history
-    # fix super annoying bug where atuin selects wrong history entry when you press enter
-    # https://github.com/atuinsh/atuin/pull/2715
-    (pkgs.atuin.overrideAttrs (old: rec {
-      version = "18.6.1";
-      src = pkgs.fetchFromGitHub {
-        owner = "atuinsh";
-        repo = "atuin";
-        rev = "v${version}";
-        hash = "sha256-aRaUiGH2CTPtmbfrtLlNfoQzQWG817eazWctqwRlOCE";
-      };
-      cargoHash = if pkgs.stdenv.hostPlatform.isLinux then
-        lib.fakeHash # TODO: set when I try on linux
-      else
-        "sha256-umagQYzOMr3Jh1RewjT0aX5FpYxs9N/70NZXoGaAfi4=";
-      # recalculate cargoDeps since buildRustPackage calculates attributes that overrideAttrs does not automatically recalculate
-      # https://github.com/NixOS/nixpkgs/blob/8ef82d9b1dd1df062acb74eba5928738d951facb/pkgs/build-support/rust/build-rust-package/default.nix#L91-L105
-      cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-        inherit src;
-        hash = cargoHash;
-      };
-    }))
+    pkgs.atuin
     # pkgs.python3
     pkgs.direnv # for lorri
     pkgs.git
@@ -128,8 +108,6 @@ in {
   programs.git.enable = true;
   # configure ~/.config/git/config
   # (does not touch ~/.gitconfig, which is read later and can override these values)
-  programs.git.userEmail = "yonathan@gmail.com";
-  programs.git.userName = "Yonathan Randolph";
   programs.git.ignores = [
     # direnv layout dir used for isolated GOPATH, python venv, nix flake
     # https://github.com/direnv/direnv/blob/v2.32.2/stdlib.sh#L113-L122
@@ -153,10 +131,10 @@ in {
     "**/.claude/*.local.json"
     "**/.claude/*.local.md"
   ];
-  programs.git.extraConfig = {
-    rebase = {
-      autosquash = true;
-    };
+  programs.git.settings = {
+    user.email = "yonathan@gmail.com";
+    user.name = "Yonathan Randolph";
+    rebase.autosquash = true;
     # rewrite git urls to always use https;
     # save the GitHub credentials once in
     # git-credential-osxkeychain instead of having
@@ -177,7 +155,7 @@ in {
   '';
   programs.zsh.enable = true;
   # ~/.zshrc
-  programs.zsh.initExtra = ''
+  programs.zsh.initContent = ''
     # https://github.com/ellie/atuin#zsh
     eval "$(atuin init zsh)"
 
