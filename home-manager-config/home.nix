@@ -147,6 +147,10 @@ in {
     # most of the time I don't want to check in nix files
     ".envrc"
     "shell.nix"
+
+    # Ignore claude code local settings .claude/*.local.* (but gitignore does not support multiple *)
+    # https://code.claude.com/docs/en/settings
+    "**/.claude/*.local.json"
   ];
   programs.git.extraConfig = {
     rebase = {
