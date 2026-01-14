@@ -5,9 +5,12 @@
 #   nix --experimental-features 'nix-command flakes' build '.#darwinConfigurations.aarch64-darwin.default.system'
 #   # the following step may be needed to bootstrap 
 #   source ./result/sw/bin/darwin-rebuild activate --flake '.#darwinConfigurations.aarch64-darwin.default.system'
-#   ./result/sw/bin/darwin-rebuild switch --flake '.#darwinConfigurations.aarch64-darwin.default.system'
+#   # the .#aarch64-darwin.default actually means #darwinConfigurations.aarch64-darwin.default
+#   sudo result/sw/bin/darwin-rebuild switch --flake '.#aarch64-darwin.default'
+#   (the darwinConfigurations. prefix and .system suffix are implied)
 # once built, you can rebuild with
-#   darwin-rebuild switch --flake .#darwinConfigurations.aarch64-darwin.default.system
+#   sudo darwin-rebuild switch --flake .#aarch64-darwin.default
+#   (the darwinConfigurations. prefix and .system suffix are implied)
 # https://github.com/LnL7/nix-darwin/tree/54a24f042f93c79f5679f133faddedec61955cf2#flakes-experimental
 
 # Previous instructions (pre-flakes)
@@ -26,8 +29,13 @@
 #   To evaluate in nix repl: :l <darwin>
 #   lib.forEach config.environment.systemPackages (x: x.name)
 
-{
+let
+  username = "yonran";
+in {
   imports = [];
+
+  # Required for user-specific settings like trackpad
+  system.primaryUser = username;
 
   environment.variables = {
     # nix-darwin sets the default to nano
@@ -78,4 +86,14 @@ auth       sufficient     pam_tid.so
   # shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
   system.defaults.ActivityMonitor.ShowCategory = null;
   system.defaults.ActivityMonitor.OpenMainWindow = null;
+
+  # Trackpad settings (must be in nix-darwin, not home-manager)
+  system.defaults.trackpad.Clicking = true;
+  system.defaults.trackpad.TrackpadThreeFingerDrag = true;
+
+  # error: Build user group has mismatching GID, aborting activation
+  # The default Nix build user group ID was changed from 30000 to 350.
+  # You are currently managing Nix build users with nix-darwin, but your
+  # nixbld group has GID 350, whereas we expected 30000.
+  ids.gids.nixbld = 350;
 }

@@ -10,12 +10,12 @@
 
 let
   inherit (pkgs) lorri;
-  sequelace = pkgs.callPackage ./sequelace.nix {};
+  username = "yonran";
 in {
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
-  home.username = "yonran";
-  home.homeDirectory = "/Users/yonran";
+  home.username = username;
+  home.homeDirectory = "/Users/${username}";
 
   # This value determines the Home Manager release that your
   # configuration is compatible with. This helps avoid breakage
@@ -32,63 +32,20 @@ in {
 
   home.packages = [
     # bash history
-    # fix super annoying bug where atuin selects wrong history entry when you press enter
-    # https://github.com/atuinsh/atuin/pull/2715
-    (pkgs.atuin.overrideAttrs (old: rec {
-      version = "18.6.1";
-      src = pkgs.fetchFromGitHub {
-        owner = "atuinsh";
-        repo = "atuin";
-        rev = "v${version}";
-        hash = "sha256-aRaUiGH2CTPtmbfrtLlNfoQzQWG817eazWctqwRlOCE";
-      };
-      cargoHash = if pkgs.stdenv.hostPlatform.isLinux then
-        lib.fakeHash # TODO: set when I try on linux
-      else
-        "sha256-umagQYzOMr3Jh1RewjT0aX5FpYxs9N/70NZXoGaAfi4=";
-      # recalculate cargoDeps since buildRustPackage calculates attributes that overrideAttrs does not automatically recalculate
-      # https://github.com/NixOS/nixpkgs/blob/8ef82d9b1dd1df062acb74eba5928738d951facb/pkgs/build-support/rust/build-rust-package/default.nix#L91-L105
-      cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-        inherit src;
-        hash = cargoHash;
-      };
-    }))
-    # pkgs.python3
+    pkgs.atuin
+    pkgs.python3
     pkgs.direnv # for lorri
     pkgs.git
     pkgs.ripgrep
     # pkgs.ripgrep-all
     pkgs.fd
-    pkgs.google-cloud-sdk
-    pkgs.sbt
-    pkgs.openjdk17
-    pkgs.visualvm
     pkgs.tmux
     pkgs.jq
     pkgs.gh
     pkgs.nodejs_24
-    # pkgs.ocrmypdf
     pkgs.nixfmt
-    pkgs.awscli2
-    (pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
-      extensions = [ "rust-src" ];
-    }))
-    # proprietary ssm-session-manager-plugin is needed for
-    # aws aws ssm start-session --region=us-west-2 --target=i-…
-    pkgs.ssm-session-manager-plugin
-    lorri
     # for getting the sha256 of fetchFromGitHub
     pkgs.nix-prefetch-github
-    # pkgs.myawscli2
-    # pkgs.mypackages
-    # pkgs.python3.pkgs.jsonschema
-    # (pkgs.python3.withPackages (p: [])).env
-    sequelace
-    # temporarily install go globally until vscode-go
-    # handles direnv properly
-    # https://github.com/golang/vscode-go/issues/2617
-    pkgs.go
-    pkgs.gopls
   ];
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
@@ -128,8 +85,6 @@ in {
   programs.git.enable = true;
   # configure ~/.config/git/config
   # (does not touch ~/.gitconfig, which is read later and can override these values)
-  programs.git.userEmail = "yonathan@gmail.com";
-  programs.git.userName = "Yonathan Randolph";
   programs.git.ignores = [
     # direnv layout dir used for isolated GOPATH, python venv, nix flake
     # https://github.com/direnv/direnv/blob/v2.32.2/stdlib.sh#L113-L122
@@ -152,10 +107,10 @@ in {
     # https://code.claude.com/docs/en/settings
     "**/.claude/*.local.json"
   ];
-  programs.git.extraConfig = {
-    rebase = {
-      autosquash = true;
-    };
+  programs.git.settings = {
+    user.email = "yonathan@gmail.com";
+    user.name = "Yonathan Randolph";
+    rebase.autosquash = true;
     # rewrite git urls to always use https;
     # save the GitHub credentials once in
     # git-credential-osxkeychain instead of having
@@ -176,7 +131,7 @@ in {
   '';
   programs.zsh.enable = true;
   # ~/.zshrc
-  programs.zsh.initExtra = ''
+  programs.zsh.initContent = ''
     # https://github.com/ellie/atuin#zsh
     eval "$(atuin init zsh)"
 
@@ -193,17 +148,6 @@ in {
   '';
 
   launchd.enable = true;
-  launchd.agents.lorri = {
-    enable = true;
-    config = {
-      # since lorri does not support on-demand launching on MacOS
-      # using launchd_activate_socket(),
-      # we have to hard-code the paths and KeepAlive always
-      KeepAlive = true;
-      RunAtLoad = true;
-      ProgramArguments = ["${lorri}/bin/lorri" "daemon"];
-    };
-  };
 
 
   # Create Grafana configuration directory and file
@@ -233,8 +177,6 @@ in {
         "-config" "${config.xdg.configHome}/grafana/grafana.ini"
       ];
       EnvironmentVariables = {
-        AWS_SDK_LOAD_CONFIG= "1"; # load ~/.aws/config
-        AWS_PROFILE = "say";
       };
       KeepAlive = true;
       RunAtLoad = true;
@@ -255,9 +197,6 @@ in {
   # Control Panel minimum KeyRepeat is 2
   targets.darwin.defaults.NSGlobalDomain.KeyRepeat = 2;
   targets.darwin.defaults.NSGlobalDomain.AppleShowScrollBars = "Always";
-  # defaults read com.apple.AppleMultitouchTrackpad Clicking
-  targets.darwin.defaults.trackpad.Clicking = true;
-  targets.darwin.defaults.trackpad.TrackpadThreeFingerDrag = true;
   # defaults read com.apple.screencapture disable-shadow
   targets.darwin.defaults.screencapture.disable-shadow = true;
   # defaults read com.apple.finder AppleShowAllFiles
@@ -277,4 +216,10 @@ in {
 
     defaults write com.apple.menuextra.clock -dict-add ShowSeconds 1
   '';
+
+  home.sessionPath = [
+    "${config.home.homeDirectory}/.npm/bin"
+    # claude code installs bin files here
+    "${config.home.homeDirectory}/.local/bin"
+  ];
 }
