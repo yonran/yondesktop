@@ -2,7 +2,7 @@ The home server is attached to a wifi router with NAT (which also provides dyndn
 
 On the router, ssh, http, https, and wireguard are port forwarded to the home server (e.g. caddy). But other services (e.g. samba-smbd) must be accessed through wireguard. The server IP address is 192.168.29.3.
 
-The home server runs nixos. See nas-config/configuration.nix. I keep it in sync with this laptop using `rsync -r --delete --exclude=hardware-configuration.nix --rsync-path="sudo rsync" ~/Documents/nixdesktop/nas-config/ yonran@home.yonathan.org:/etc/nixos/ && ssh yonran@home.yonathan.org -- sudo nixos-rebuild switch`.
+The home server runs nixos. See nas-config/configuration.nix. I keep it in sync with this laptop using `nas-config/deploy-over-ssh.sh`.
 
 All the important data is stored in `/firstpool/family`, which is a password-encrypted ZFS mount.
 

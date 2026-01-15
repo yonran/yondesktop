@@ -81,8 +81,7 @@ so that broadcom_sta module can load
   ```
 14. Then use another machine to `ssh yonran@yonnas.local` and do the rest remotely.
   ```
-  rsync --rsync-path="sudo rsync" configuration.nix yonran@yonnas.local:/etc/nixos/configuration.nix &&
-  ssh yonran@yonnas.local -- sudo nixos-rebuild switch
+  ./deploy-over-ssh.sh
   ```
 
 ## Configure caddy

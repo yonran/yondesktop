@@ -5,7 +5,7 @@
 # This file (and hardware-configuration.nix) was originally generated
 # by `nixos-generate-config` but I am customizing it 
 
-# rsync --rsync-path="sudo rsync" ~/Documents/nixdesktop/nas-config/configuration.nix yonran@yonnas.local.:/etc/nixos/configuration.nix && ssh yonran@yonnas.local. -- sudo nixos-rebuild switch
+# To sync and apply: nas-config/deploy-over-ssh.sh
 
 # Edit this configuration file to define what should be installed on
 # your system. Help is available in the configuration.nix(5) man page, on
