@@ -204,13 +204,19 @@ in {
   targets.darwin.defaults.trackpad.TrackpadThreeFingerDrag = true;
   # defaults read com.apple.screencapture disable-shadow
   targets.darwin.defaults.screencapture.disable-shadow = true;
+
+  # to refresh finder settings, killall Finder https://macos-defaults.com/finder/appleshowallextensions.html
   # defaults read com.apple.finder AppleShowAllFiles
   targets.darwin.defaults.finder.AppleShowAllFiles = true;
   targets.darwin.defaults.finder.ShowStatusBar = true;
   targets.darwin.defaults.finder.AppleShowAllExtensions = true;
   targets.darwin.defaults.dock.orientation = "right";
 
+  # to refresh clock, killall SystemUIServer https://macos-defaults.com/menubar/flashdateseparators.html
   targets.darwin.defaults."com.apple.menuextra.clock".ShowSeconds = true;
+  # to refresh, killall Dock https://macos-defaults.com/dock/orientation.html
+  targets.darwin.defaults."com.apple.dock".orientation = "right";
+  targets.darwin.currentHostDefaults."com.apple.controlcenter".BatteryShowPercentage = true;
 
   home.file.".ssh/authorized_keys".text = ''
     ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDqxHb38PL4CRl7bbYqeQ1ekXRX45iNo9/Ocsel5ar5AH31Va0fD2iBBtV22I/tHcIv4PrGX2vbTiumeG/oTLjThcQFZkqXthFnbDYeJ8+3fdeM9LcRcbt2G1vZmn+9hOSHNWAvfufpEgahHiZjJKOTIkKvhcNOGwsGh4CX+CZ7Vp3xq+tAaHTggczpJOzEPzfH/sBgXWA9+4v7eA+Kgw0Qu+Tkm2jZZjhyRD+PKie2UbodqZpI11rmCGFbS41ftA+kpcdy1QkS/Fa76uLSsW/3ejaKCcmVQKIZlOSJFWS48GEqr+SbWP1RA9FWiR9BpfOpE6S8oRylYzrZBOlEnKn pixel 6 phone
