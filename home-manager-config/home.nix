@@ -267,15 +267,14 @@ in {
   targets.darwin.defaults.finder.AppleShowAllExtensions = true;
   targets.darwin.defaults.dock.orientation = "right";
 
-  targets.darwin.defaults.activationScripts.extraUserActivation = ''
+  home.activation.darwinKeyboardShortcuts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     # Settings -> Keyboard -> Shortcuts -> App Shortcuts
     # @=⌘, ~=⌥Option ^=Control, $=⇧Shift
-    defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Move Window to Left Side of Screen" '@^\U2190'
-    defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Move Window to Right Side of Screen" '@^\U2192'
+    run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Move Window to Left Side of Screen" '@^\U2190'
+    run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Move Window to Right Side of Screen" '@^\U2192'
     # Catalina hover on green full-screen button https://support.apple.com/en-us/HT204948
-    defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Tile Window to Left of Screen" '@~^\U2190'
-    defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Tile Window to Right of Screen" '@~^\U2192'
-
-    defaults write com.apple.menuextra.clock -dict-add ShowSeconds 1
+    run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Tile Window to Left of Screen" '@~^\U2190'
+    run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Tile Window to Right of Screen" '@~^\U2192'
   '';
+  targets.darwin.defaults."com.apple.menuextra.clock".ShowSeconds = true;
 }
