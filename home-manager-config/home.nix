@@ -9,7 +9,6 @@
 { config, pkgs, lib, ... }:
 
 let
-  inherit (pkgs) lorri;
   username = "yonran";
 in {
   # Home Manager needs a bit of information about you and the
@@ -35,7 +34,7 @@ in {
     pkgs.atuin
     pkgs.codex
     pkgs.python3
-    pkgs.direnv # for lorri
+    pkgs.direnv
     pkgs.git
     pkgs.ripgrep
     # pkgs.ripgrep-all
@@ -124,7 +123,7 @@ in {
   };
 
   programs.bash.enable = true;
-  # direnv and lorri: see
+  # direnv: see
   # https://nixos.wiki/wiki/Flakes#Direnv_integration
   # ~/.bashrc
   programs.bash.bashrcExtra = ''
