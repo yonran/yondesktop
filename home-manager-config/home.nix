@@ -10,11 +10,12 @@
 
 let
   inherit (pkgs) lorri;
+  username = "yonran";
 in {
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
-  home.username = "yonran";
-  home.homeDirectory = "/Users/yonran";
+  home.username = username;
+  home.homeDirectory = "/Users/${username}";
 
   # This value determines the Home Manager release that your
   # configuration is compatible with. This helps avoid breakage
@@ -219,4 +220,10 @@ in {
     run /usr/bin/defaults write NSGlobalDomain NSUserKeyEquivalents -dict-add "Tile Window to Right of Screen" '@~^\U2192'
   '';
   targets.darwin.defaults."com.apple.menuextra.clock".ShowSeconds = true;
+
+  home.sessionPath = [
+    "${config.home.homeDirectory}/.npm/bin"
+    # claude code installs bin files here
+    "${config.home.homeDirectory}/.local/bin"
+  ];
 }
