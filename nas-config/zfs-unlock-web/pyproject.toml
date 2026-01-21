@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zfs-unlock-web"
+version = "0.1.0"
+dependencies = ["flask"]
+
+[tool.setuptools.package-data]
+zfs_unlock_web = ["templates/*.html"]

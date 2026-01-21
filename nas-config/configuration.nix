@@ -112,6 +112,7 @@ in
       ./owntracks-recorder-service.nix
       ./modules/immich.nix
       ./modules/monitoring-scripts.nix
+      ./modules/zfs-unlock-web.nix
     ];
   # Socket buffer tuning for TCP over high-latency links
   #
@@ -539,6 +540,8 @@ in
     ];
   };
   users.users.jellyfin.extraGroups = [ "video" "render" ];
+  # Allow Caddy to connect to the zfs-unlock-web Unix socket
+  users.users.caddy.extraGroups = [ "zfs-unlock" ];
 
   # Home Assistant - home automation platform
   # - Listens on 8123 (HTTP)
@@ -737,6 +740,32 @@ in
         route {
           authorize with mypolicy
           reverse_proxy 127.0.0.1:9090
+        }
+      }
+
+      # ZFS unlock web GUI behind OIDC SSO
+      @unlock_noauth {
+        host unlock.yonathan.org
+        not path /auth*
+      }
+      handle @unlock_noauth {
+        # Rate limit unlock attempts (5 per 5 minutes per IP)
+        rate_limit {
+          zone unlock_zone {
+            key {remote_host}
+            events 5
+            window 300s
+
+            match {
+              method POST
+              path /unlock
+            }
+          }
+        }
+
+        route {
+          authorize with mypolicy
+          reverse_proxy unix//run/zfs-unlock-web.sock
         }
       }
     '';
@@ -958,6 +987,9 @@ in
   };
 
   services.owntracks-recorder.enable = true;
+
+  # ZFS unlock web GUI (socket-activated, OIDC-protected)
+  services.zfs-unlock-web.enable = true;
 
 
   # Copy the NixOS configuration file and link it from the resulting system

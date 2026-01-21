@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZFS Unlock - {{ dataset }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .status-row:last-child {
+            border-bottom: none;
+        }
+        .status-label {
+            font-weight: 500;
+        }
+        .status-value {
+            font-family: monospace;
+        }
+        .status-locked {
+            color: #e74c3c;
+        }
+        .status-unlocked {
+            color: #27ae60;
+        }
+        .status-mounted {
+            color: #27ae60;
+        }
+        .status-unmounted {
+            color: #f39c12;
+        }
+        .status-active {
+            color: #27ae60;
+        }
+        .status-inactive, .status-failed {
+            color: #e74c3c;
+        }
+        .status-unknown {
+            color: #95a5a6;
+        }
+        form {
+            margin-top: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .flash {
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .flash-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .flash-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        h2 {
+            font-size: 1.1em;
+            margin: 0 0 15px 0;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .all-good {
+            text-align: center;
+            padding: 30px;
+            color: #27ae60;
+        }
+        .all-good svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>ZFS Unlock</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <h2>Dataset Status</h2>
+        <div class="status-row">
+            <span class="status-label">Dataset</span>
+            <span class="status-value">{{ dataset }}</span>
+        </div>
+        <div class="status-row">
+            <span class="status-label">Key Status</span>
+            <span class="status-value {% if keystatus == 'available' %}status-unlocked{% else %}status-locked{% endif %}">
+                {{ keystatus }}
+            </span>
+        </div>
+        <div class="status-row">
+            <span class="status-label">Mounted</span>
+            <span class="status-value {% if mounted %}status-mounted{% else %}status-unmounted{% endif %}">
+                {{ "yes" if mounted else "no" }}
+            </span>
+        </div>
+    </div>
+
+    {% if keystatus == 'unavailable' %}
+    <div class="card">
+        <h2>Unlock Dataset</h2>
+        <form method="POST" action="{{ url_for('unlock') }}">
+            <label for="passphrase">Passphrase</label>
+            <input type="password" id="passphrase" name="passphrase" required autofocus
+                   placeholder="Enter encryption passphrase">
+            <button type="submit">Unlock and Mount</button>
+        </form>
+    </div>
+    {% elif not mounted %}
+    <div class="card">
+        <h2>Mount Dataset</h2>
+        <p>Key is loaded but dataset is not mounted.</p>
+        <form method="POST" action="{{ url_for('mount') }}">
+            <button type="submit">Mount Dataset</button>
+        </form>
+    </div>
+    {% else %}
+    <div class="card all-good">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>Dataset is unlocked and mounted</div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h2>Dependent Services</h2>
+        {% for service, status in services.items() %}
+        <div class="status-row">
+            <span class="status-label">{{ service.replace('.service', '').replace('podman-', '') }}</span>
+            <span class="status-value status-{{ status }}">{{ status }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
