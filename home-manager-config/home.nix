@@ -217,9 +217,20 @@ in {
   targets.darwin.defaults."com.apple.dock".orientation = "right";
   targets.darwin.currentHostDefaults."com.apple.controlcenter".BatteryShowPercentage = true;
 
-  home.file.".ssh/authorized_keys".text = ''
+  # Workaround for SSH StrictModes rejecting symlinks owned by root
+  # https://github.com/nix-community/home-manager/issues/3090#issuecomment-3341948190
+  # by GaspardCulis
+  home.file.".ssh/authorized_keys_source" = {
+    text = ''
     ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDqxHb38PL4CRl7bbYqeQ1ekXRX45iNo9/Ocsel5ar5AH31Va0fD2iBBtV22I/tHcIv4PrGX2vbTiumeG/oTLjThcQFZkqXthFnbDYeJ8+3fdeM9LcRcbt2G1vZmn+9hOSHNWAvfufpEgahHiZjJKOTIkKvhcNOGwsGh4CX+CZ7Vp3xq+tAaHTggczpJOzEPzfH/sBgXWA9+4v7eA+Kgw0Qu+Tkm2jZZjhyRD+PKie2UbodqZpI11rmCGFbS41ftA+kpcdy1QkS/Fa76uLSsW/3ejaKCcmVQKIZlOSJFWS48GEqr+SbWP1RA9FWiR9BpfOpE6S8oRylYzrZBOlEnKn pixel 6 phone
   '';
+    onChange = ''
+      cat ~/.ssh/authorized_keys_source > ~/.ssh/authorized_keys
+      rm ~/.ssh/authorized_keys_source
+      chmod 600 ~/.ssh/authorized_keys
+    '';
+    force = true;
+  };
 
   home.sessionPath = [
     "${config.home.homeDirectory}/.npm/bin"
