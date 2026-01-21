@@ -34,7 +34,6 @@ in {
     pkgs.atuin
     pkgs.codex
     pkgs.python3
-    pkgs.direnv
     pkgs.git
     pkgs.ripgrep
     # pkgs.ripgrep-all
@@ -81,6 +80,17 @@ in {
     # RUST_SRC_PATH="${pkgs.rust-src}/lib/rustlib/src/rust/library/";
   };
 
+  programs.direnv = {
+    enable = true;
+
+    # Add eval "$(direnv hook zsh)" to bash and zsh configs
+    enableBashIntegration = true;
+    enableZshIntegration = true;
+
+    # install nix-direnv integrated into direnv to make use_nix faster and to add to gc roots
+    # https://github.com/nix-community/nix-direnv
+    nix-direnv.enable = true;
+  };
 
   programs.git.enable = true;
   # configure ~/.config/git/config
@@ -123,21 +133,14 @@ in {
   };
 
   programs.bash.enable = true;
-  # direnv: see
-  # https://nixos.wiki/wiki/Flakes#Direnv_integration
   # ~/.bashrc
   programs.bash.bashrcExtra = ''
-    # https://direnv.net/docs/hook.html
-    eval "$(direnv hook bash)"
   '';
   programs.zsh.enable = true;
   # ~/.zshrc
   programs.zsh.initContent = ''
     # https://github.com/ellie/atuin#zsh
     eval "$(atuin init zsh)"
-
-    # https://direnv.net/docs/hook.html
-    eval "$(direnv hook zsh)"
 
     # make meta-backspace and meta-arrow move only to hyphen or slash like bash
     # https://unix.stackexchange.com/a/258661/9342
@@ -222,8 +225,8 @@ in {
   # by GaspardCulis
   home.file.".ssh/authorized_keys_source" = {
     text = ''
-    ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDqxHb38PL4CRl7bbYqeQ1ekXRX45iNo9/Ocsel5ar5AH31Va0fD2iBBtV22I/tHcIv4PrGX2vbTiumeG/oTLjThcQFZkqXthFnbDYeJ8+3fdeM9LcRcbt2G1vZmn+9hOSHNWAvfufpEgahHiZjJKOTIkKvhcNOGwsGh4CX+CZ7Vp3xq+tAaHTggczpJOzEPzfH/sBgXWA9+4v7eA+Kgw0Qu+Tkm2jZZjhyRD+PKie2UbodqZpI11rmCGFbS41ftA+kpcdy1QkS/Fa76uLSsW/3ejaKCcmVQKIZlOSJFWS48GEqr+SbWP1RA9FWiR9BpfOpE6S8oRylYzrZBOlEnKn pixel 6 phone
-  '';
+      ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDqxHb38PL4CRl7bbYqeQ1ekXRX45iNo9/Ocsel5ar5AH31Va0fD2iBBtV22I/tHcIv4PrGX2vbTiumeG/oTLjThcQFZkqXthFnbDYeJ8+3fdeM9LcRcbt2G1vZmn+9hOSHNWAvfufpEgahHiZjJKOTIkKvhcNOGwsGh4CX+CZ7Vp3xq+tAaHTggczpJOzEPzfH/sBgXWA9+4v7eA+Kgw0Qu+Tkm2jZZjhyRD+PKie2UbodqZpI11rmCGFbS41ftA+kpcdy1QkS/Fa76uLSsW/3ejaKCcmVQKIZlOSJFWS48GEqr+SbWP1RA9FWiR9BpfOpE6S8oRylYzrZBOlEnKn pixel 6 phone
+    '';
     onChange = ''
       cat ~/.ssh/authorized_keys_source > ~/.ssh/authorized_keys
       rm ~/.ssh/authorized_keys_source
