@@ -190,6 +190,10 @@ in
   # ZFS is not needed during early boot and this flag is recommended to be off
   # (https://openzfs.github.io/openzfs-docs/Getting%20Started/NixOS/)
   boot.zfs.forceImportRoot = false;
+  # Import ZFS pools at boot (encrypted datasets stay locked until unlocked via web UI)
+  boot.zfs.extraPools = [ "firstpool" "backuppool" ];
+  # Don't prompt for encryption keys at boot - use web UI instead
+  boot.zfs.requestEncryptionCredentials = false;
 
   # Load software watchdog module (softdog) for system hang protection
   # Intel TCO hardware watchdog isn't available on this MacBook Pro hardware,
