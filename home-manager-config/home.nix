@@ -43,6 +43,9 @@ in {
     pkgs.gh
     pkgs.nodejs_24
     pkgs.nixfmt
+    (pkgs.rust-bin.stable.latest.default.override {
+      extensions = [ "rust-src" ];
+    })
     # for getting the sha256 of fetchFromGitHub
     pkgs.nix-prefetch-github
   ];
