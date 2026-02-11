@@ -120,6 +120,8 @@ in {
     # https://code.claude.com/docs/en/settings
     "**/.claude/*.local.json"
     "**/.claude/*.local.md"
+    # Boris Cherny suggestion: put worktrees in .claude https://x.com/bcherny/status/2017742743125299476
+    "**/.claude/worktrees"
   ];
   programs.git.settings = {
     user.email = "yonathan@gmail.com";
