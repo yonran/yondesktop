@@ -29,9 +29,16 @@ in {
   # Let Home Manager install and manage itself.
   # programs.home-manager.enable = true;
 
+  programs.atuin = {
+    enable = true;
+    enableZshIntegration = true;
+    settings = {
+      enter_accept = true;
+      search.filters = [ "session" "directory" "global" ];
+    };
+  };
+
   home.packages = [
-    # bash history
-    pkgs.atuin
     pkgs.codex
     pkgs.python3
     pkgs.git
@@ -121,7 +128,7 @@ in {
     "**/.claude/*.local.json"
     "**/.claude/*.local.md"
     # Boris Cherny suggestion: put worktrees in .claude https://x.com/bcherny/status/2017742743125299476
-    "**/.claude/worktrees"
+    "**/.claude/worktrees/"
   ];
   programs.git.settings = {
     user.email = "yonathan@gmail.com";
@@ -144,9 +151,6 @@ in {
   programs.zsh.enable = true;
   # ~/.zshrc
   programs.zsh.initContent = ''
-    # https://github.com/ellie/atuin#zsh
-    eval "$(atuin init zsh)"
-
     # make meta-backspace and meta-arrow move only to hyphen or slash like bash
     # https://unix.stackexchange.com/a/258661/9342
     autoload -U select-word-style
