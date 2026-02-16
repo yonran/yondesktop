@@ -39,7 +39,6 @@ in {
   };
 
   home.packages = [
-    pkgs.codex
     pkgs.python3
     pkgs.git
     pkgs.ripgrep
