@@ -253,7 +253,15 @@ in {
     force = true;
   };
 
+  # npm configuration
+  home.file.".npmrc".text = ''
+    ignore-scripts=true
+    # npm i -g should go to here instead of into /nix
+    prefix=${config.home.homeDirectory}/.npm-global
+  '';
+
   home.sessionPath = [
+    "${config.home.homeDirectory}/.npm-global/bin"
     "${config.home.homeDirectory}/.npm/bin"
     # claude code installs bin files here
     "${config.home.homeDirectory}/.local/bin"
