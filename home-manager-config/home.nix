@@ -50,6 +50,8 @@ in {
     pkgs.gh
     pkgs.nodejs_24
     pkgs.nixfmt
+    pkgs.podman
+    pkgs.podman-compose
     (pkgs.rust-bin.stable.latest.default.override {
       extensions = [ "rust-src" ];
     })
@@ -148,6 +150,10 @@ in {
   # ~/.bashrc
   programs.bash.bashrcExtra = ''
   '';
+  programs.bash.shellAliases = {
+    docker = "podman";
+    "docker-compose" = "podman-compose";
+  };
   programs.zsh.enable = true;
   # ~/.zshrc
   programs.zsh.initContent = ''
@@ -156,6 +162,10 @@ in {
     autoload -U select-word-style
     select-word-style bash
   '';
+  programs.zsh.shellAliases = {
+    docker = "podman";
+    "docker-compose" = "podman-compose";
+  };
   programs.zsh.oh-my-zsh.enable = true;
   programs.zsh.oh-my-zsh.extraConfig = ''
   '';
