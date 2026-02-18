@@ -130,6 +130,8 @@ in {
     "**/.claude/*.local.md"
     # Boris Cherny suggestion: put worktrees in .claude https://x.com/bcherny/status/2017742743125299476
     "**/.claude/worktrees/"
+    # my own random notes
+    "*.local.md"
   ];
   programs.git.settings = {
     user.email = "yonathan@gmail.com";
