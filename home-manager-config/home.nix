@@ -55,6 +55,9 @@ in {
     (pkgs.rust-bin.stable.latest.default.override {
       extensions = [ "rust-src" ];
     })
+    pkgs.xcbuild
+    pkgs.apple-sdk_14
+    pkgs.clang
     # for getting the sha256 of fetchFromGitHub
     pkgs.nix-prefetch-github
   ];
@@ -213,6 +216,11 @@ in {
     # https://unix.stackexchange.com/a/258661/9342
     autoload -U select-word-style
     select-word-style bash
+
+    # xcbuild's xcrun doesn't follow symlinks in DEVELOPER_DIR,
+    # so we must pass the realpath of ~/.nix-profile which contains
+    # Platforms/ and Toolchains/ from pkgs.apple-sdk_14
+    export DEVELOPER_DIR=$(realpath ~/.nix-profile)
   '';
   programs.zsh.shellAliases = {
     docker = "podman";
