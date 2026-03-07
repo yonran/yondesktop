@@ -48,6 +48,7 @@ in {
     pkgs.jq
     pkgs.gh
     pkgs.nodejs_24
+    pkgs.go
     pkgs.nixfmt
     pkgs.podman
     pkgs.podman-compose
