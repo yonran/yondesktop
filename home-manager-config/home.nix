@@ -40,6 +40,7 @@ in {
 
   home.packages = [
     pkgs.python3
+    pkgs.uv
     pkgs.git
     pkgs.ripgrep
     # pkgs.ripgrep-all
