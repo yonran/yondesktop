@@ -5,7 +5,7 @@ let
   # Define variables from environment file
   UPLOAD_LOCATION = "/firstpool/family/immich/photos";
   DB_DATA_LOCATION = "/firstpool/family/immich/postgres";
-  IMMICH_VERSION = "v2.4.1";
+  IMMICH_VERSION = "v2.6.3";
   DB_PASSWORD = "postgres";
   DB_USERNAME = "postgres";
   DB_DATABASE_NAME = "immich";
@@ -45,7 +45,7 @@ in
       ########## Immich PostgreSQL Database ##########
       immich-database = {
         # exact image line from your .container
-        image = "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:32324a2f41df5de9efe1af166b7008c3f55646f8d0e00d9550c16c9822366b4a";
+        image = "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23";
 
         environmentFiles = [ "/etc/immich/.env" ];
 
@@ -71,7 +71,7 @@ in
 
       ########## Immich Redis (Valkey) ##########
       immich-redis = {
-        image = "docker.io/valkey/valkey:8-bookworm@sha256:facc1d2c3462975c34e10fccb167bfa92b0e0dbd992fc282c29a61c3243afb11";
+        image = "docker.io/valkey/valkey:9@sha256:3eeb09785cd61ec8e3be35f8804c8892080f3ca21934d628abc24ee4ed1698f6";
 
         extraOptions = [
           "--network=podman"
