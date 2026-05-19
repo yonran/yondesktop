@@ -173,9 +173,24 @@ in {
     # git-credential-osxkeychain instead of having
     # another set of credentials in ~/.ssh
     url."https://github.com/".insteadOf = "ssh://git@github.com/";
+    # The nixpkgs darwin build of git ships a system gitconfig with
+    # `credential.helper = osxkeychain`. credential.helper is multi-valued
+    # and accumulates across system/global/local scopes, so without resetting
+    # it osxkeychain still runs (and prompts the keychain) before gh is
+    # consulted. An empty value clears any previously-collected helpers; the
+    # per-host gh entries below then become the only helpers for github.com.
+    #
+    # To verify only gh is invoked (and not osxkeychain), feed a credential
+    # query on stdin and watch the helper processes git spawns:
+    #   printf 'protocol=https\nhost=github.com\n\n' | GIT_TRACE=1 git credential fill
+    # Look for a `start_command` line naming `gh auth git-credential get`
+    # and no `git-credential-osxkeychain` process. `git config --get-all
+    # credential.helper` is NOT a valid check — it lists raw values from
+    # every scope and does not simulate the empty-value reset.
+    credential.helper = "";
     # set up credential helper to use gh; equivalent to gh auth setup-git:
     credential."https://github.com".helper = "!${pkgs.gh}/bin/gh auth git-credential";
-    credential."https://gist.github.com ".helper = "!${pkgs.gh}/bin/gh auth git-credential";
+    credential."https://gist.github.com".helper = "!${pkgs.gh}/bin/gh auth git-credential";
   };
 
   programs.bash.enable = true;
