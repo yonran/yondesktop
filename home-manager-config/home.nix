@@ -263,6 +263,11 @@ in {
     prefix=${config.home.homeDirectory}/.npm-global
   '';
 
+  # yarn berry configuration
+  home.file.".yarnrc.yml".text = ''
+    enableScripts: false
+  '';
+
   home.sessionPath = [
     "${config.home.homeDirectory}/.npm-global/bin"
     "${config.home.homeDirectory}/.npm/bin"
