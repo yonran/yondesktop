@@ -138,6 +138,36 @@ in {
     user.email = "yonathan@gmail.com";
     user.name = "Yonathan Randolph";
     rebase.autosquash = true;
+    # Reject malformed/suspicious objects from remotes (catches a real but
+    # rare class of supply-chain attack, and surfaces repo corruption early).
+    #
+    # When it fires, the error names the specific check, e.g.:
+    #   error: object 5a3f...: zeroPaddedFilemode: contains zero-padded file modes
+    #   fatal: fsck error in pack <hash>
+    #
+    # Common false positives are legacy data, not attacks:
+    #   zeroPaddedFilemode   - old git wrote modes like "40000" instead of "040000"
+    #                          (Linux kernel mirrors, old AOSP, pre-2010 repos)
+    #   missingSpaceBeforeDate / badTimezone / missingEmail
+    #                        - malformed commit metadata from old git versions
+    #   nullSha1             - submodule pointer to 0000...0000
+    #   missingTaggerEntry   - old tags without tagger field
+    #
+    # To handle a finding, downgrade the *specific* named check — never
+    # disable fsckObjects wholesale. Three scopes, narrowest first:
+    #   git -c fetch.fsck.zeroPaddedFilemode=warn clone <url>   # one-time
+    #   git config fetch.fsck.zeroPaddedFilemode warn           # this repo
+    #   # or in ~/.gitconfig:                                   # global
+    #   #   [fetch "fsck"]
+    #   #       zeroPaddedFilemode = warn
+    # Values: error (default here), warn, ignore. Prefer `warn` over `ignore`.
+    #
+    # If receive.fsckObjects fires on push, *you* authored a malformed object
+    # locally (usually via filter-branch / history rewrite). Investigate
+    # before downgrading receive.fsck.<check>.
+    transfer.fsckObjects = true;
+    fetch.fsckObjects = true;
+    receive.fsckObjects = true;
     # rewrite git urls to always use https;
     # save the GitHub credentials once in
     # git-credential-osxkeychain instead of having
@@ -266,6 +296,26 @@ in {
   # yarn berry configuration
   home.file.".yarnrc.yml".text = ''
     enableScripts: false
+  '';
+
+  # pip configuration: refuse to install outside a virtualenv
+  # (uv handles global tool installs; system pip should never touch site-packages)
+  #
+  # only-binary = :all: refuses source distributions, so a malicious package's
+  # setup.py / pyproject.toml build hook cannot execute on `pip install`.
+  # Wheels are pre-built and just unpacked, so no arbitrary code runs at install.
+  #
+  # Override when a package has no wheel (rare; common for git installs,
+  # editable installs, niche packages):
+  #   pip install --only-binary=:none: somepkg          # disable for one command
+  #   pip install --no-binary=somepkg somepkg           # allow source for one package
+  #   PIP_ONLY_BINARY=:none: pip install ...            # disable for a shell
+  # Note: --no-binary alone does NOT override only-binary=:all:; you must use
+  # --only-binary=:none: to actually empty the "binary-only" set.
+  xdg.configFile."pip/pip.conf".text = ''
+    [global]
+    require-virtualenv = true
+    only-binary = :all:
   '';
 
   home.sessionPath = [
