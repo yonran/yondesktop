@@ -6,7 +6,7 @@
 #   "$(nix path-info .#homeConfigurations.x86_64.activationPackage)"/activate
 # or simply:
 #   home-manager switch --flake '.#x86_64'
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, isWork ? false, ... }:
 
 let
   username = "yonran";
@@ -221,23 +221,26 @@ in {
 
 
   # Create Grafana configuration directory and file
-  xdg.configFile."grafana/grafana.ini".text = ''
-    [server]
-    http_port = 3000
-    http_addr = ::1
+  # Skipped on the work laptop (isWork=true via the `work` flake output).
+  xdg.configFile."grafana/grafana.ini" = lib.mkIf (!isWork) {
+    text = ''
+      [server]
+      http_port = 3000
+      http_addr = ::1
 
-    # [security]
-    # admin_user = admin
-    # admin_password = $ADMIN_PASSWORD
+      # [security]
+      # admin_user = admin
+      # admin_password = $ADMIN_PASSWORD
 
-    [paths]
-    data = ${config.xdg.dataHome}/grafana/data
-    logs = ${config.xdg.dataHome}/grafana/logs
-    plugins = ${config.xdg.dataHome}/grafana/plugins
-  '';
+      [paths]
+      data = ${config.xdg.dataHome}/grafana/data
+      logs = ${config.xdg.dataHome}/grafana/logs
+      plugins = ${config.xdg.dataHome}/grafana/plugins
+    '';
+  };
 
   # LaunchAgent for macOS startup
-  launchd.agents.grafana = {
+  launchd.agents.grafana = lib.mkIf (!isWork) {
     enable = true;
     config = {
       ProgramArguments = [

@@ -24,7 +24,7 @@
 
   outputs = { nixpkgs, home-manager, rust-overlay, ... }:
     let
-      makeHomeConfiguration = system:
+      makeHomeConfiguration = system: isWork:
         home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${system};
 
@@ -39,13 +39,18 @@
             })
           ];
 
-          # Optionally use extraSpecialArgs
-          # to pass through arguments to home.nix
+          # Pass isWork through to home.nix so work-only laptops can opt
+          # out of personal services like the Grafana LaunchAgent.
+          extraSpecialArgs = { inherit isWork; };
         };
     in {
       homeConfigurations = {
-        x86_64 = makeHomeConfiguration "x86_64-darwin";
-        aarch64 = makeHomeConfiguration "aarch64-darwin";
+        x86_64 = makeHomeConfiguration "x86_64-darwin" false;
+        aarch64 = makeHomeConfiguration "aarch64-darwin" false;
+        # Work laptop: same modules, but with isWork=true so personal
+        # services (currently: Grafana) are not installed.
+        #   home-manager switch --flake '.#work'
+        work = makeHomeConfiguration "aarch64-darwin" true;
       };
     };
 }
