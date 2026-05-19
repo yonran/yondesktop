@@ -51,6 +51,7 @@ in {
     pkgs.nixfmt
     pkgs.podman
     pkgs.podman-compose
+    pkgs.uv
     (pkgs.rust-bin.stable.latest.default.override {
       extensions = [ "rust-src" ];
     })
