@@ -56,7 +56,9 @@ in {
     pkgs.uv
     (pkgs.rust-bin.stable.latest.default.override {
       extensions = [ "rust-src" ];
+      targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
     })
+    pkgs.wasm-pack
     pkgs.xcbuild
     pkgs.apple-sdk_14
     pkgs.clang
