@@ -991,6 +991,11 @@ in
     };
   };
 
+  services.rustdesk-server = {
+    enable = true;
+    openFirewall = true;
+  };
+
   services.owntracks-recorder.enable = true;
 
   # ZFS unlock web GUI (socket-activated, OIDC-protected)
