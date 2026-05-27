@@ -172,7 +172,12 @@ in {
     # save the GitHub credentials once in
     # git-credential-osxkeychain instead of having
     # another set of credentials in ~/.ssh
-    url."https://github.com/".insteadOf = "ssh://git@github.com/";
+    url."https://github.com/".insteadOf = [
+      "ssh://git@github.com/"
+      # SCP-style form (e.g. `git@github.com:owner/repo.git`) is a separate
+      # URL syntax from `ssh://git@github.com/...`, so it needs its own rule.
+      "git@github.com:"
+    ];
     # The nixpkgs darwin build of git ships a system gitconfig with
     # `credential.helper = osxkeychain`. credential.helper is multi-valued
     # and accumulates across system/global/local scopes, so without resetting
