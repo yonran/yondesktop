@@ -275,18 +275,39 @@ in {
   # Control Panel minimum KeyRepeat is 2
   targets.darwin.defaults.NSGlobalDomain.KeyRepeat = 2;
   targets.darwin.defaults.NSGlobalDomain.AppleShowScrollBars = "Always";
-  # defaults read com.apple.AppleMultitouchTrackpad Clicking
-  targets.darwin.defaults.trackpad.Clicking = true;
-  targets.darwin.defaults.trackpad.TrackpadThreeFingerDrag = true;
+  # IMPORTANT: home-manager's `targets.darwin.defaults.<key>` writes to the
+  # `defaults` domain literally named <key>. There are NO shortcuts — keys
+  # like `trackpad`, `dock`, `finder`, `screencapture` create bogus domains
+  # (e.g. `defaults read trackpad`) and do NOT touch the real `com.apple.*`
+  # prefs. Always use the full domain name as a quoted attribute key.
+  # Verify with: defaults read com.apple.<domain> <key>
+  #
+  # Built-in trackpad (defaults read com.apple.AppleMultitouchTrackpad)
+  targets.darwin.defaults."com.apple.AppleMultitouchTrackpad" = {
+    Clicking = true;
+    TrackpadThreeFingerDrag = true;
+    # macOS auto-disables conflicting three-finger gestures when three-finger
+    # drag is on; pin them so they don't drift if drag is ever toggled off/on.
+    TrackpadThreeFingerTapGesture = 0;
+    TrackpadThreeFingerHorizSwipeGesture = 0;
+    TrackpadThreeFingerVertSwipeGesture = 0;
+  };
+  # Magic Trackpad (Bluetooth) — separate domain from the built-in trackpad.
+  targets.darwin.defaults."com.apple.driver.AppleBluetoothMultitouch.trackpad" = {
+    Clicking = true;
+    TrackpadThreeFingerDrag = true;
+    TrackpadThreeFingerTapGesture = 0;
+    TrackpadThreeFingerHorizSwipeGesture = 0;
+    TrackpadThreeFingerVertSwipeGesture = 0;
+  };
   # defaults read com.apple.screencapture disable-shadow
-  targets.darwin.defaults.screencapture.disable-shadow = true;
+  targets.darwin.defaults."com.apple.screencapture".disable-shadow = true;
 
   # to refresh finder settings, killall Finder https://macos-defaults.com/finder/appleshowallextensions.html
   # defaults read com.apple.finder AppleShowAllFiles
-  targets.darwin.defaults.finder.AppleShowAllFiles = true;
-  targets.darwin.defaults.finder.ShowStatusBar = true;
-  targets.darwin.defaults.finder.AppleShowAllExtensions = true;
-  targets.darwin.defaults.dock.orientation = "right";
+  targets.darwin.defaults."com.apple.finder".AppleShowAllFiles = true;
+  targets.darwin.defaults."com.apple.finder".ShowStatusBar = true;
+  targets.darwin.defaults."com.apple.finder".AppleShowAllExtensions = true;
 
   # to refresh clock, killall SystemUIServer https://macos-defaults.com/menubar/flashdateseparators.html
   targets.darwin.defaults."com.apple.menuextra.clock".ShowSeconds = true;
