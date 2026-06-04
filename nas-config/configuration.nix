@@ -95,6 +95,52 @@ let
     ${pkgs.hdparm}/bin/hdparm -S 120 "$DEVICE"
   '';
 
+  # Disable the TX-segmentation offloads on the Realtek RTL8153 USB NIC (driver: r8152).
+  #
+  # WHY: The recurring whole-system wedge ("xhci_hcd 0000:07:00.0: xHCI host controller not
+  # responding, assume dead" -> all USB devices incl. the TerraMaster DAS disconnect -> ZFS pools
+  # suspend -> 30-min hung reboot) is *triggered by this NIC*, not the disks or a power brownout.
+  # Diagnosed 2026-06-04 from journald: every crash boot (-1..-5) logged an r8152 distress event
+  # (NETDEV WATCHDOG / "Tx timeout" / "Stop submitting intr, status -108"); the one healthy boot
+  # logged none. Boot -3 caught the ordering directly:
+  #     r8152 enp7s0u2u4: NETDEV WATCHDOG: transmit queue 0 timed out 5184 ms
+  #     r8152 enp7s0u2u4: Tx timeout
+  #     xhci_hcd 0000:07:00.0: xHCI host controller not responding, assume dead
+  # Ruled out: no AER/PCIe errors (not signal integrity), no overcurrent/VBUS (not brownout, and the
+  # DAS is self-powered), random uptimes 2h41m..16h11m and times-of-day 07:38..20:57 (not a cron),
+  # disks idle with no precursor I/O (not storage). See crashes.md (2026-06-04) for the full writeup.
+  #
+  # MECHANISM (confirmed in the kernel source, drivers/net/usb/r8152.c @ v6.12):
+  #   - features/hw_features advertise NETIF_F_TSO | NETIF_F_TSO6 | NETIF_F_SG, on by default
+  #     (r8152.c:9857-9867). RTL8153 is RTL_VER_03+, so none of these are gated off for our chip.
+  #   - HW TSO is fragile: a transport-offset limit (GTTCPHO_MAX=127) and a 16 KB tx-aggregation
+  #     buffer force software-segmentation workarounds (r8152_csum_workaround r8152.c:2210-2249,
+  #     rtl8152_features_check r8152.c:2916-2930).
+  #   - On a stuck TX queue the 5 s watchdog (RTL8152_TX_TIMEOUT = 5*HZ, r8152.c:761) fires
+  #     rtl8152_tx_timeout(), which calls usb_queue_reset_device() (r8152.c:2848-2855) -- that USB
+  #     reset is what wedges the shared Alpine Ridge xHCI and takes the disks down with it.
+  # Disabling tso/tso6 means the chip's segmentation engine is never exercised, so that path can't
+  # stall. gso is the software companion that would otherwise still hand large segments to the driver.
+  #
+  # EVIDENCE THIS WORKS: mixed but real. Realtek's own engineer (Hayes Wang) root-caused an r8152
+  # TX-timeout to TSO and a missing ndo_features_check, with `ethtool -K tso off` as the workaround
+  #   https://groups.google.com/a/chromium.org/g/chromium-os-dev/c/xA2T6WyegQ4
+  # Other similar r8152 "Tx timeout / HC died" cases were instead firmware/kernel regressions
+  # (OpenWrt #22130 https://github.com/openwrt/openwrt/issues/22130 ; Pop!_OS #3600
+  # https://github.com/pop-os/pop/issues/3600 ; Arch BBS #213517
+  # https://bbs.archlinux.org/viewtopic.php?id=213517 ), and at least one user found offload tuning
+  # did NOT help (RPi #5239 https://github.com/raspberrypi/linux/issues/5239 ). So this is a
+  # low-cost, source-justified TEST: if Tx timeouts stop over a few crash-free days it's confirmed;
+  # the permanent fix is to move networking off USB onto a Thunderbolt PCIe NIC.
+  #
+  # Offloads disabled (ethtool name -> kernel flag): tso -> NETIF_F_TSO, tx-tcp6-segmentation ->
+  # NETIF_F_TSO6, gso -> generic (software) segmentation. RX-path (rx/gro/lro) and checksum offloads
+  # are NOT on the transmit-queue-timeout path, so they are left enabled to avoid needless CPU cost.
+  r8152DisableTxOffloadScript = pkgs.writeShellScript "r8152-disable-tx-offload" ''
+    IFACE="$1"
+    ${pkgs.ethtool}/bin/ethtool -K "$IFACE" tso off tx-tcp6-segmentation off gso off
+  '';
+
   # Dyson integration for Home Assistant
   libdyson-neon = pkgs.home-assistant.python.pkgs.callPackage ./libdyson-neon.nix { };
   dyson-ha = pkgs.callPackage ./dyson-ha.nix {
@@ -966,6 +1012,26 @@ in
     description = "Set hdparm -S 120 (sleep after 10 minutes) and -B 127 (APM) on newly added disks %I";
     serviceConfig.Type = "oneshot";
     serviceConfig.ExecStart = "${hdparmSetScript} /dev/%I";
+  };
+
+  # Apply the r8152 TX-offload workaround (see r8152DisableTxOffloadScript above for the full
+  # reasoning + citations) whenever the NIC appears. Same intent as the hdparm-set@ udev pattern --
+  # re-tune the device on every (re)appearance -- but bound to the net device's systemd .device unit
+  # instead of a udev SYSTEMD_WANTS template. We do this because, unlike block devices, network
+  # interfaces are *renamed* (eth0 -> enp7s0u2u4) during the udev add event, which makes the %k
+  # instance name in a SYSTEMD_WANTS rule unreliable; the .device unit only materializes under the
+  # final predictable name, so binding to it fires at the right moment. wantedBy/bindsTo also re-run
+  # this if the interface re-enumerates after a USB reset. enp7s0u2u4 is hardcoded to match the
+  # existing reset-thunderbolt-xhci service, which assumes the same stable name.
+  systemd.services.r8152-disable-tx-offload = {
+    description = "Disable RTL8153 TX segmentation offloads (r8152 Tx-timeout / xHCI-death workaround)";
+    bindsTo = [ "sys-subsystem-net-devices-enp7s0u2u4.device" ];
+    after = [ "sys-subsystem-net-devices-enp7s0u2u4.device" ];
+    wantedBy = [ "sys-subsystem-net-devices-enp7s0u2u4.device" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${r8152DisableTxOffloadScript} enp7s0u2u4";
+    };
   };
 
   # As a backstop for the "r8152 ... Stop submitting intr, status -108" failure this service invokes the
