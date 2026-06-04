@@ -84,6 +84,21 @@ so that broadcom_sta module can load
   ./deploy-over-ssh.sh
   ```
 
+## Deploying changes
+
+From a workstation with SSH access, push the local `nas-config/` to the NAS and rebuild:
+
+```
+./deploy-over-ssh.sh
+```
+
+This rsyncs `nas-config/` to `/etc/nixos/` on `yonran@home.yonathan.org` (via `sudo rsync`,
+excluding `hardware-configuration.nix`) and runs `sudo nixos-rebuild switch`. To verify a change
+builds without activating it, run `sudo nixos-rebuild dry-build` on the NAS instead.
+
+For ad-hoc diagnosis, `ssh yonran@home.yonathan.org` and use `journalctl`, `zpool status`,
+`systemctl`, and sysfs under `/sys/bus/pci|usb/...`.
+
 ## Configure caddy
 
 To configure Let’s Encrypt ACME DNS-01 wildcard certificate,
@@ -229,3 +244,34 @@ First-time setup
 Notes
 - If using Intel iGPU, the config includes `intel-media-driver` and `vaapiIntel` for older gens.
 - For AMD/NVIDIA, you may adjust `hardware.opengl.extraPackages` accordingly.
+
+## Known issue: USB NIC / xHCI wedge crashes
+
+The server (`MacBookPro14,1`) has only two Thunderbolt 3 / USB-C ports — one is power. Both the
+TerraMaster D5-300C USB DAS and the Realtek RTL8153 USB Ethernet adapter (`enp7s0u2u4`, driver
+`r8152`) sit behind one bus-powered USB-C hub on the machine's single JHL6540 controller, so they
+share one xHCI.
+
+Symptom: the NIC's TX queue periodically hangs (`r8152 ... NETDEV WATCHDOG: transmit queue ...
+timed out` / `Tx timeout`); the driver's USB device reset wedges the shared xHCI (`xhci_hcd
+0000:07:00.0 ... assume dead`); all USB devices drop; both ZFS pools suspend (`failmode=wait`);
+and the reboot hangs ~30 min on the un-syncable pools. After a reboot the encrypted dataset is
+locked again and must be re-unlocked (see the zfs-unlock web UI). Full evidence chain and the
+`drivers/net/usb/r8152.c` mechanism are in `../crashes.md` (2026-06-04 entry).
+
+Mitigations in `configuration.nix`:
+- `systemd.services.r8152-disable-tx-offload` — disables the implicated TX segmentation offloads
+  (`tso`/`tx-tcp6-segmentation`/`gso`) on `enp7s0u2u4`. Workaround, **awaiting ~1–2 weeks of
+  validation**; evidence it fixes this is mixed.
+- `reboot.target` job timeout cut from the 30-min default to 2 min, so a wedged reboot
+  force-completes quickly (`JobTimeoutAction=reboot-force` is already the systemd default) instead
+  of hanging. Healthy reboots are unaffected.
+- `reset-thunderbolt-xhci` service + timer reboots the box if the NIC vanishes (safety net; its
+  PCI-reset recovery has never actually succeeded, so it only reboots). Kept until the offload fix
+  is proven, then revisit.
+
+Permanent fix if the offload workaround does not hold: move networking off USB onto a
+**Thunderbolt PCIe NIC** (e.g. Aquantia AQC107, kernel `atlantic` driver) so the NIC no longer
+shares the storage xHCI. With only two ports (one for power) this means a Thunderbolt **PD dock**
+with a PCIe NIC; a plain powered USB-C hub would not isolate the NIC (still USB Realtek behind the
+same controller).
