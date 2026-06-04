@@ -517,6 +517,30 @@ in
     rebootTime = "2min";   # Wait 2 minutes before forcing reboot if system doesn't respond
   };
 
+  # Shorten reboot.target's job timeout from the 30-min systemd default to 2 min.
+  #
+  # WHY: when a USB/xHCI wedge suspends the ZFS pools (failmode=wait), a reboot blocks on the
+  # un-syncable pool -- the kernel threads txg_sync/zfs/umount sit in uninterruptible D-state and
+  # CANNOT be SIGKILLed, so no per-service TimeoutStopSec can clear them. systemd already force-
+  # reboots out of this via reboot.target's built-in JobTimeoutAction=reboot-force, but the default
+  # JobTimeoutSec/JobRunningTimeoutSec is 30min, so the box stays hung ~30 min each time (observed
+  # 2026-01-21 20:23->20:53 and 2026-06-04 04:42->05:12; see crashes.md). This only shortens that
+  # backstop timer -- the action is unchanged. It applies to *every* reboot but has no effect on a
+  # healthy one: those finish in seconds (units are individually killed at DefaultTimeoutStopSec=90s),
+  # well under 2 min. Only a reboot that genuinely can't complete in 2 min (i.e. a wedge) is force-
+  # rebooted -- the same safe power-cycle, at 2 min instead of 30. The forced cut is consistent: root
+  # /nix /boot are journaled ext4/vfat on the internal NVMe (recover on next boot), and ZFS is
+  # transactional, so it equals a power outage the pools already survive. asDropin extends the
+  # upstream unit rather than replacing it (keeps Requires=, JobTimeoutAction=reboot-force, etc.).
+  systemd.units."reboot.target" = {
+    overrideStrategy = "asDropin";
+    text = ''
+      [Unit]
+      JobTimeoutSec=120
+      JobRunningTimeoutSec=120
+    '';
+  };
+
   systemd.services.jellyfin = {
     requires = [ "firstpool-family.mount" ];
     after = [ "firstpool-family.mount" "local-fs.target" ];
