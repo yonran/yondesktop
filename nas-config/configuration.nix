@@ -122,23 +122,31 @@ let
   # Disabling tso/tso6 means the chip's segmentation engine is never exercised, so that path can't
   # stall. gso is the software companion that would otherwise still hand large segments to the driver.
   #
-  # EVIDENCE THIS WORKS: mixed but real. Realtek's own engineer (Hayes Wang) root-caused an r8152
-  # TX-timeout to TSO and a missing ndo_features_check, with `ethtool -K tso off` as the workaround
+  # EVIDENCE: mixed. Realtek's own engineer (Hayes Wang) root-caused one r8152 TX-timeout to TSO and
+  # a missing ndo_features_check, with `ethtool -K tso off` as the workaround
   #   https://groups.google.com/a/chromium.org/g/chromium-os-dev/c/xA2T6WyegQ4
-  # Other similar r8152 "Tx timeout / HC died" cases were instead firmware/kernel regressions
-  # (OpenWrt #22130 https://github.com/openwrt/openwrt/issues/22130 ; Pop!_OS #3600
+  # but other r8152 "Tx timeout / HC died" cases were firmware/kernel regressions (OpenWrt #22130
+  # https://github.com/openwrt/openwrt/issues/22130 ; Pop!_OS #3600
   # https://github.com/pop-os/pop/issues/3600 ; Arch BBS #213517
-  # https://bbs.archlinux.org/viewtopic.php?id=213517 ), and at least one user found offload tuning
-  # did NOT help (RPi #5239 https://github.com/raspberrypi/linux/issues/5239 ). So this is a
-  # low-cost, source-justified TEST: if Tx timeouts stop over a few crash-free days it's confirmed;
-  # the permanent fix is to move networking off USB onto a Thunderbolt PCIe NIC.
+  # https://bbs.archlinux.org/viewtopic.php?id=213517 ) and one user found offload tuning did NOT
+  # help (RPi #5239 https://github.com/raspberrypi/linux/issues/5239 ).
+  #
+  # VALIDATION RESULT (2026-06-04): FAILED for us. With the minimal tso/tso6/gso set disabled for
+  # ~2h the box crashed again identically (r8152 Tx timeout -> xHCI assume dead at 14:16). So the
+  # segmentation engine is NOT the (sole) trigger. Below we escalate to the maximal set (adds sg/tx,
+  # which also force the segmentation features off) as a last cheap shot -- low odds. The real fix is
+  # to move networking off USB onto a Thunderbolt PCIe NIC (Aquantia AQC107, atlantic) via a
+  # Thunderbolt PD dock; see crashes.md / Readme.md. (The 2-min reboot.target cap DID work that
+  # crash: down ~5min instead of ~30.) Leave this service in place -- harmless, and it's the live
+  # test of the escalated set.
   #
   # Offloads disabled (ethtool name -> kernel flag): tso -> NETIF_F_TSO, tx-tcp6-segmentation ->
-  # NETIF_F_TSO6, gso -> generic (software) segmentation. RX-path (rx/gro/lro) and checksum offloads
-  # are NOT on the transmit-queue-timeout path, so they are left enabled to avoid needless CPU cost.
+  # NETIF_F_TSO6, gso -> generic (software) segmentation, sg -> NETIF_F_SG (the TSO enabler),
+  # tx -> TX checksum (its removal forces sg/tso off too). RX-path (rx/gro/lro) is left enabled --
+  # not on the transmit-queue-timeout path.
   r8152DisableTxOffloadScript = pkgs.writeShellScript "r8152-disable-tx-offload" ''
     IFACE="$1"
-    ${pkgs.ethtool}/bin/ethtool -K "$IFACE" tso off tx-tcp6-segmentation off gso off
+    ${pkgs.ethtool}/bin/ethtool -K "$IFACE" tso off tx-tcp6-segmentation off gso off sg off tx off
   '';
 
   # Dyson integration for Home Assistant

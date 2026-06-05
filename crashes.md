@@ -87,3 +87,37 @@ The recurring whole-system wedge is **triggered by the USB Ethernet adapter, not
 - One report where offload tuning did NOT help: RPi #5239 <https://github.com/raspberrypi/linux/issues/5239>
 
 **Validation:** need several crash-free days to trust it. If Tx timeouts persist, escalate the offload set (add `sg off` / `tx off`) or, as the permanent fix, move networking off USB entirely onto a **Thunderbolt→PCIe NIC** (e.g. AQC107 `atlantic`), which removes the `r8152` from the shared XHCI. With only 2 ports (1 = power) this means a Thunderbolt PD dock that charges + provides a PCIe NIC; a plain powered USB-C hub would *not* isolate the NIC (still USB Realtek behind the same controller).
+
+## 2026-06-04 (same day, later) — Validation: offload workaround FAILED; reboot cap worked
+
+The minimal TX-offload workaround (`tso`/`tx-tcp6-segmentation`/`gso` off) was deployed ~12:06 and confirmed applied at 12:07:48 (`ethtool -k` showed them off). **With offloads disabled for ~2 hours the box crashed again, identically:**
+
+```
+14:16:13 r8152 enp7s0u2u4: NETDEV WATCHDOG: transmit queue 0 timed out 5248 ms
+14:16:13 r8152 enp7s0u2u4: Tx timeout
+14:16:13 xhci_hcd 0000:07:00.0: xHCI host controller not responding, assume dead
+14:16:13 xhci_hcd 0000:07:00.0: HC died; cleaning up
+14:16:42 WARNING: Pool 'firstpool' has encountered an uncorrectable I/O failure and has been suspended.
+```
+
+**Conclusion: disabling TX segmentation offloads does NOT fix this NIC.** The segmentation engine is not the (sole) trigger — the `r8152` TX path / USB link is flaky more broadly. The cheap software avenue is essentially exhausted.
+
+**The 2-min `reboot.target` cap DID work**, as designed:
+
+```
+14:16:42 reset-thunderbolt-xhci: recovery failed; rebooting
+14:18:42 reboot.target: Job reboot.target/start timed out → Forcibly rebooting: job timed out   (exactly 2 min)
+14:21:25 back up
+```
+
+Crash → back-up was **~5 min** (14:16 → 14:21) vs the old ~30+. Keep that change.
+
+**Follow-ups committed:** escalated `r8152-disable-tx-offload` to the maximal set (`tso tx-tcp6-segmentation gso sg tx` off) as a last cheap shot (low odds, since segmentation-off already failed). The offload service auto-ran correctly on the 14:21 boot (the `.device`-unit binding works).
+
+**Recommended permanent fix (equipment):** move Ethernet off USB onto a Thunderbolt **PCIe** NIC so it no longer shares the storage xHCI. With only 2 USB-C ports (one = power), this requires a Thunderbolt PD dock that both charges the Mac and carries a PCIe NIC:
+
+- **OWC Thunderbolt Pro Dock** — 10GbE Aquantia AQC107 (PCIe, kernel `atlantic`), 85 W PD. One cable charges + isolated NIC + USB-A for the DAS, frees the 2nd port. **Top pick** (~$329).
+- **CalDigit TS4** — 2.5GbE Realtek RTL8125 (PCIe, `r8169`), 98 W PD, many ports (~$400). 2.5G is plenty for home; confirm the NIC is the PCIe RTL8125.
+- A plain powered USB-C hub (even with PD pass-through) would **not** help — its NIC is still a USB Realtek behind the same controller.
+
+After switching, the NIC name changes (PCIe `atlantic` ≠ `enp7s0u2u4`), so update the `IFACE="enp7s0u2u4"` references in `reset-thunderbolt-xhci` and `r8152-disable-tx-offload` (the latter can be removed entirely once the USB NIC is gone).

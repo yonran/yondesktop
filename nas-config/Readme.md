@@ -260,18 +260,21 @@ locked again and must be re-unlocked (see the zfs-unlock web UI). Full evidence 
 `drivers/net/usb/r8152.c` mechanism are in `../crashes.md` (2026-06-04 entry).
 
 Mitigations in `configuration.nix`:
-- `systemd.services.r8152-disable-tx-offload` — disables the implicated TX segmentation offloads
-  (`tso`/`tx-tcp6-segmentation`/`gso`) on `enp7s0u2u4`. Workaround, **awaiting ~1–2 weeks of
-  validation**; evidence it fixes this is mixed.
-- `reboot.target` job timeout cut from the 30-min default to 2 min, so a wedged reboot
-  force-completes quickly (`JobTimeoutAction=reboot-force` is already the systemd default) instead
-  of hanging. Healthy reboots are unaffected.
+- `systemd.services.r8152-disable-tx-offload` — disables TX offloads on `enp7s0u2u4`. **Validated
+  2026-06-04 and FAILED**: with `tso`/`tx-tcp6-segmentation`/`gso` off the box still crashed
+  identically after ~2h. Escalated to the maximal set (`+ sg + tx` off) as a last cheap shot (low
+  odds — the segmentation engine isn't the trigger). Will be removed once the USB NIC is gone.
+- `reboot.target` job timeout cut from the 30-min default to 2 min — **confirmed working**: the
+  2026-06-04 14:16 crash recovered in ~5 min instead of ~30 (`JobTimeoutAction=reboot-force` is the
+  systemd default; we only shortened the timer). Healthy reboots are unaffected. Keep.
 - `reset-thunderbolt-xhci` service + timer reboots the box if the NIC vanishes (safety net; its
-  PCI-reset recovery has never actually succeeded, so it only reboots). Kept until the offload fix
-  is proven, then revisit.
+  PCI-reset recovery has never actually succeeded, so it only reboots).
 
-Permanent fix if the offload workaround does not hold: move networking off USB onto a
-**Thunderbolt PCIe NIC** (e.g. Aquantia AQC107, kernel `atlantic` driver) so the NIC no longer
-shares the storage xHCI. With only two ports (one for power) this means a Thunderbolt **PD dock**
-with a PCIe NIC; a plain powered USB-C hub would not isolate the NIC (still USB Realtek behind the
-same controller).
+Permanent fix (recommended — the offload workaround did not hold): move networking off USB onto a
+**Thunderbolt PCIe NIC** so it no longer shares the storage xHCI. With only two ports (one for
+power) this needs a Thunderbolt **PD dock** that both charges the Mac and carries a PCIe NIC:
+- **OWC Thunderbolt Pro Dock** — 10GbE Aquantia AQC107 (PCIe, kernel `atlantic`), 85 W PD. Top pick.
+- **CalDigit TS4** — 2.5GbE PCIe Realtek RTL8125 (`r8169`), 98 W PD.
+A plain powered USB-C hub (even with PD pass-through) would NOT help — its NIC is still a USB
+Realtek behind the same controller. After switching, the NIC name changes (PCIe `atlantic` ≠
+`enp7s0u2u4`); update the `IFACE` references in `reset-thunderbolt-xhci` / `r8152-disable-tx-offload`.
