@@ -915,6 +915,8 @@ in
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDqxHb38PL4CRl7bbYqeQ1ekXRX45iNo9/Ocsel5ar5AH31Va0fD2iBBtV22I/tHcIv4PrGX2vbTiumeG/oTLjThcQFZkqXthFnbDYeJ8+3fdeM9LcRcbt2G1vZmn+9hOSHNWAvfufpEgahHiZjJKOTIkKvhcNOGwsGh4CX+CZ7Vp3xq+tAaHTggczpJOzEPzfH/sBgXWA9+4v7eA+Kgw0Qu+Tkm2jZZjhyRD+PKie2UbodqZpI11rmCGFbS41ftA+kpcdy1QkS/Fa76uLSsW/3ejaKCcmVQKIZlOSJFWS48GEqr+SbWP1RA9FWiR9BpfOpE6S8oRylYzrZBOlEnKn pixel6"
       # personal used M1 Macbook Pro (2026)
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII0j/WPdD7I+NQVh9uHb1uTQvtN2NWcLlYvcxF/dug0I yonran@MacBookPro.lan"
+      # 2026 work Macbook Pro
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC2ADlEL1SlpFiZsfrhm76K8h3wnVFgXX9D+pAeDfq38 yonran@Yonathans-MacBook-Pro.lan"
     ];
   };
   # Samba-only user account (no shell login)
