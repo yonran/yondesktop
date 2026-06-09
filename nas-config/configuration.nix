@@ -623,6 +623,8 @@ in
   users.users.jellyfin.extraGroups = [ "video" "render" ];
   # Allow Caddy to connect to the zfs-unlock-web Unix socket
   users.users.caddy.extraGroups = [ "zfs-unlock" ];
+  # Grant Home Assistant access to the SkyConnect Zigbee dongle (/dev/ttyUSB0)
+  users.users.hass.extraGroups = [ "dialout" ];
 
   # Home Assistant - home automation platform
   # - Listens on 8123 (HTTP)
@@ -642,11 +644,11 @@ in
       };
     };
     extraComponents = [
-      # Common integrations you might want
-      "met"  # Weather
-      "mobile_app"  # Mobile app support
-      "zeroconf"  # Auto-discovery
-      "sun"  # Sun position
+      "met"          # Weather
+      "mobile_app"   # Mobile app support
+      "zeroconf"     # Auto-discovery
+      "sun"          # Sun position
+      "zha"          # Zigbee via SkyConnect (/dev/serial/by-id/usb-Nabu_Casa_SkyConnect_v1.0_*)
     ];
     # Custom components
     customComponents = [
