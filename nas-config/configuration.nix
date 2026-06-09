@@ -32,24 +32,23 @@ let
   resetThunderboltXhci = pkgs.writeShellScript "reset-thunderbolt-xhci" ''
     #!${pkgs.bash}/bin/bash
     set -euo pipefail
-    IFACE="enp7s0u2u4"
     XHCI_DEV="0000:07:00.0"
     ROOT_PORTS=(0000:05:04.0 0000:05:02.0 0000:05:01.0)
 
     shopt -s nullglob
     TB_NODES=(/sys/bus/thunderbolt/devices/*-*)
 
-    nic_up() {
-      ${pkgs.iproute2}/bin/ip link show "$IFACE" > /dev/null 2>&1
+    xhci_up() {
+      [ -e "/sys/bus/pci/devices/$XHCI_DEV" ]
     }
 
     log() { printf '%s\n' "$1"; }
 
-    if nic_up; then
+    if xhci_up; then
       exit 0
     fi
 
-    log "network interface $IFACE missing; attempting Thunderbolt reset sequence"
+    log "xHCI $XHCI_DEV missing; attempting Thunderbolt reset sequence"
 
     reset_tb_bus=false
     for node in "''${TB_NODES[@]}"; do
@@ -76,8 +75,8 @@ let
 
     # Give udev time to rebuild the USB tree before deciding the recovery failed.
     sleep 8
-    if nic_up; then
-      log "interface $IFACE returned after Thunderbolt reset"
+    if xhci_up; then
+      log "xHCI $XHCI_DEV returned after Thunderbolt reset"
       exit 0
     fi
 
