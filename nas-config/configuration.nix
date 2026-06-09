@@ -1038,6 +1038,10 @@ in
     # Prevent the Intel JHL6540 Thunderbolt controller (parent of the USB NIC/HDDs) from entering runtime D3.
     # Without this, the logs show "pcieport 0000:05:04.0: Unable to change power state from D3hot to D0, device inaccessible"
     # immediately followed by "xhci_hcd 0000:07:00.0: xHCI host controller not responding, assume dead".
+    # Deauthorize the Realtek RTL8153 NIC (0bda:8153) when it appears on this specific
+    # uni USB-C hub (05e3:0626). Deauthorizing prevents r8152 from binding, so it can
+    # never crash the shared xHCI. Scoped to this hub so r8152 still works on other ports.
+    ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0bda", ATTR{idProduct}=="8153", ATTRS{idVendor}=="05e3", ATTRS{idProduct}=="0626", ATTR{authorized}="0"
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x15d4", TEST=="power/control", ATTR{power/control}="on"
     # The Nov 23/24/25 failures showed the bridges (05:01/05:02/05:04, vendor 0x8086/device 0x15d3) hit D3hot first,
     # so force them to stay "on" too; otherwise the XHCI fix alone has no effect because the parent bus vanishes.
