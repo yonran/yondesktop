@@ -121,3 +121,27 @@ Crash → back-up was **~5 min** (14:16 → 14:21) vs the old ~30+. Keep that ch
 - A plain powered USB-C hub (even with PD pass-through) would **not** help — its NIC is still a USB Realtek behind the same controller.
 
 After switching, the NIC name changes (PCIe `atlantic` ≠ `enp7s0u2u4`), so update the `IFACE="enp7s0u2u4"` references in `reset-thunderbolt-xhci` and `r8152-disable-tx-offload` (the latter can be removed entirely once the USB NIC is gone).
+
+## 2026-06-05 — Maximal offloads ALSO failed; note the alternate crash signature
+
+The escalated **maximal** offload set (`tso tx-tcp6-segmentation gso sg tx` off) went live ~19:21 on 06-04. The box then crashed **twice more**: 06-04 **19:12** (just before the escalation) and **22:00** (≈2h40m *after* the maximal set was applied). So both the minimal and maximal offload sets FAILED — disabling TX offloads does not stop this NIC. The offload approach is conclusively dead; do not pursue it further.
+
+Crash times on 06-04: 04:41, 14:16, 19:12, 22:00 (four in one day).
+
+**Alternate log signature (important — it fooled a keyword grep).** These two crashes did NOT print `NETDEV WATCHDOG` / `Tx timeout` / `xHCI ... assume dead` / `HC died` / `pool ... suspended`. Instead:
+
+```
+19:12:22 r8152 enp7s0u2u4: Tx status -108   (×4)
+19:12:22 r8152 enp7s0u2u4: Get ether addr fail
+19:12:22 usb 4-2.3: USB disconnect          ← DAS hub
+19:12:22 sd [sdb/sde/sda/sdc/sdd] Synchronize Cache(10) failed: DID_ERROR   ← all 5 disks drop
+19:12:23 r8152-cfgselector 4-2.4: USB disconnect   ← NIC
+```
+
+Same root failure (the whole `usb 4-2` tree — NIC `4-2.4` + DAS hub `4-2.3` + all drives — drops), but the controller was not declared "dead"; the devices just `USB disconnect` with `-108` (ESHUTDOWN). When searching logs for these crashes, grep `Tx status -108|USB disconnect|Get ether addr fail` in addition to the older `Tx timeout|assume dead` strings.
+
+**What went differently (mildly better):** the `reset-thunderbolt-xhci` watchdog caught the NIC-missing within ~2 s and ran `systemctl reboot` (graceful — shows in the journal as `systemd-logind: The system will reboot now!`, which is the watchdog, not a human). The pools did **not** log "suspended" and the reboot hit the 2-min cap, so total downtime was ~3 min instead of ~30. The reboot-cap change is doing its job.
+
+(Correction to the record: a mid-investigation note briefly concluded these two reboots were user-initiated/not crashes — that was wrong, caused by grepping only the old `Tx timeout`/`assume dead` strings. They were the same r8152 USB-tree crash, rebooted by the watchdog.)
+
+**Status:** offload service left deployed but ineffective (revert pending). Decision stands: the only real fix is hardware — move Ethernet to a Thunderbolt **PCIe** NIC (CalDigit TS3 Plus, Intel i210 `igb`, ~$100 used; or OWC TB3 Pro Dock / TS4). See Readme.md.
