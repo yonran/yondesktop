@@ -883,6 +883,8 @@ in
   };
   # add a /etc/systemd/system/caddy.service.d/overrides.conf
   systemd.services.caddy = {
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
     # Provide Cloudflare API token via systemd credentials (TPM2-encrypted)
     # 1) Create /etc/secrets/cloudflare_token.cred using `systemd-creds encrypt --tpm2 -n cloudflare_token.cred ...`
     # 2) LoadCredentialEncrypted passes it to the service; systemd decrypts into $CREDENTIALS_DIRECTORY/cloudflare_token.cred
