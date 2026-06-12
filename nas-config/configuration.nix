@@ -31,52 +31,80 @@ let
   # plus the XHCI function, and rescan PCI before giving up and rebooting.
   resetThunderboltXhci = pkgs.writeShellScript "reset-thunderbolt-xhci" ''
     #!${pkgs.bash}/bin/bash
-    set -euo pipefail
-    XHCI_DEV="0000:07:00.0"
-    ROOT_PORTS=(0000:05:04.0 0000:05:02.0 0000:05:01.0)
+    # NOTE: not set -e -- the recovery path must run to completion (and reach the
+    # reboot fallback) even when individual rescue steps fail.
+    set -uo pipefail
 
-    shopt -s nullglob
-    TB_NODES=(/sys/bus/thunderbolt/devices/*-*)
-
-    xhci_up() {
-      [ -e "/sys/bus/pci/devices/$XHCI_DEV" ]
-    }
+    # Stable anchor: the Thunderbolt upstream switch sits directly under PCH root
+    # port 0000:00:1c.4, so its BDF never moves. Its downstream-port bridges (PCI
+    # bus 05) and the xHCI below them are what drop off the PCIe bus when the
+    # controller wedges. Removing+rescanning THIS node re-trains the link
+    # (validated 2026-06-12: it re-enumerated the entire USB tree, no reboot).
+    TB_UPSTREAM="0000:04:00.0"
 
     log() { printf '%s\n' "$1"; }
 
-    if xhci_up; then
+    # DETECTION -- device-agnostic, assumes nothing is plugged into the hub.
+    # The wedge ("xhci_hcd ... assume dead") drops the PCIe link to the bus-05
+    # bridges: their config space then reads back all-ones (ffff) even though the
+    # sysfs nodes linger and still report power_state=D0/active (verified 2026-06-12).
+    # So device-node presence, driver binding, and power_state are ALL useless as
+    # signals -- only a config-space read distinguishes alive (8086) from wedged
+    # (ffff). We anchor on the fixed TB_UPSTREAM and scan its children rather than
+    # hardcoding the xHCI's own BDF, because a hot rescan can re-enumerate the xHCI
+    # at a new address. (This replaces the old checks: the USB-NIC-disappeared
+    # trigger went moot when the RTL8153 was deauthorized, and the "is the xHCI PCI
+    # node present?" check never fired because the node lingers when the HC dies.)
+    link_wedged() {
+      local cfg v
+      for cfg in /sys/bus/pci/devices/$TB_UPSTREAM/0000:*/config; do
+        [ -r "$cfg" ] || continue
+        v=$(od -An -tx2 -N2 "$cfg" 2>/dev/null | tr -d ' ')
+        [ "$v" = "ffff" ] && return 0
+      done
+      return 1
+    }
+
+    # Backstop: a wedge that somehow slips past the link check still shows up as a
+    # SUSPENDED ZFS pool (the DAS dropped, failmode=wait). procfs read -- instant,
+    # and it never touches the dead device, so it cannot hang.
+    suspended_pools() {
+      local f
+      for f in /proc/spl/kstat/zfs/*/state; do
+        [ -r "$f" ] || continue
+        [ "$(cat "$f")" = "SUSPENDED" ] && basename "$(dirname "$f")"
+      done
+    }
+
+    if ! link_wedged && [ -z "$(suspended_pools)" ]; then
       exit 0
     fi
+    log "Thunderbolt USB stack wedged (suspended pools: $(suspended_pools | tr '\n' ' ')); attempting remove+rescan recovery"
 
-    log "xHCI $XHCI_DEV missing; attempting Thunderbolt reset sequence"
-
-    reset_tb_bus=false
-    for node in "''${TB_NODES[@]}"; do
-      if [ -w "$node/authorized" ]; then
-        reset_tb_bus=true
-        log "toggling Thunderbolt authorization on $(basename "$node")"
-        printf '0\n' > "$node/authorized" || true
-        sleep 1
-        printf '1\n' > "$node/authorized" || true
-      fi
-    done
-    $reset_tb_bus && sleep 2
-
-    for dev in "''${ROOT_PORTS[@]}" "$XHCI_DEV"; do
-      if [ -e "/sys/bus/pci/devices/$dev" ]; then
-        log "removing PCI function $dev"
-        printf '%s\n' "$dev" > "/sys/bus/pci/devices/$dev/remove" || true
-      fi
-    done
-
+    # Re-train the dead PCIe link: drop the whole TB switch subtree, then rescan.
+    if [ -e "/sys/bus/pci/devices/$TB_UPSTREAM/remove" ]; then
+      log "removing $TB_UPSTREAM"
+      printf '1\n' > "/sys/bus/pci/devices/$TB_UPSTREAM/remove" || true
+    fi
     sleep 2
     printf '1\n' > /sys/bus/pci/rescan
     log "PCI rescan triggered for Thunderbolt hierarchy"
 
-    # Give udev time to rebuild the USB tree before deciding the recovery failed.
+    # Give udev time to rebuild the USB tree and recreate the /dev/disk/by-id
+    # symlinks the pool vdevs are imported under, THEN tell ZFS to retry I/O.
+    # The old script never ran "zpool clear", so even a successful re-enumeration
+    # left the pool SUSPENDED and always fell through to the reboot -- this is the
+    # step that gives the no-reboot recovery path a real chance to succeed.
     sleep 8
-    if xhci_up; then
-      log "xHCI $XHCI_DEV returned after Thunderbolt reset"
+    mapfile -t SUSPENDED < <(suspended_pools)
+    for p in "''${SUSPENDED[@]}"; do
+      log "clearing suspended pool $p"
+      ${config.boot.zfs.package}/bin/zpool clear "$p" || true
+    done
+    sleep 5
+
+    if ! link_wedged && [ -z "$(suspended_pools)" ]; then
+      log "recovery succeeded: PCIe link back and no pool suspended"
       exit 0
     fi
 
@@ -1073,11 +1101,14 @@ in
     };
   };
 
-  # As a backstop for the "r8152 ... Stop submitting intr, status -108" failure this service invokes the
-  # recovery script whenever the timer detects the NIC is missing. Earlier versions simply removed the
-  # XHCI device and rebooted; the new script does the more complete Thunderbolt reset described above.
+  # Auto-heal the recurring Thunderbolt xHCI wedge ("xhci_hcd ... assume dead" -> DAS drops -> ZFS
+  # pool suspends). The timer (below) runs the recovery script every minute; it detects the wedge by
+  # reading the TB switch's downstream PCIe config space (ffff = link down) and recovers by
+  # remove+rescan of 0000:04:00.0 followed by `zpool clear`, only rebooting if that fails. See the
+  # script header for the full rationale. (Earlier versions keyed off the USB NIC disappearing and
+  # always rebooted; the NIC trigger went moot once the RTL8153 was deauthorized.)
   systemd.services.reset-thunderbolt-xhci = {
-    description = "Reset Thunderbolt-attached XHCI when USB NIC disappears";
+    description = "Auto-recover wedged Thunderbolt xHCI (PCIe link down -> remove/rescan -> zpool clear)";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = resetThunderboltXhci;

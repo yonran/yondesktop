@@ -252,29 +252,35 @@ TerraMaster D5-300C USB DAS and the Realtek RTL8153 USB Ethernet adapter (`enp7s
 `r8152`) sit behind one bus-powered USB-C hub on the machine's single JHL6540 controller, so they
 share one xHCI.
 
-Symptom: the NIC's TX queue periodically hangs (`r8152 ... NETDEV WATCHDOG: transmit queue ...
-timed out` / `Tx timeout`); the driver's USB device reset wedges the shared xHCI (`xhci_hcd
-0000:07:00.0 ... assume dead`); all USB devices drop; both ZFS pools suspend (`failmode=wait`);
-and the reboot hangs ~30 min on the un-syncable pools. After a reboot the encrypted dataset is
-locked again and must be re-unlocked (see the zfs-unlock web UI). Full evidence chain and the
-`drivers/net/usb/r8152.c` mechanism are in `../crashes.md` (2026-06-04 entry).
+Symptom: the Thunderbolt xHCI periodically wedges (`xhci_hcd 0000:07:00.0 ... assume dead` /
+`HC died`); all USB devices drop; the ZFS pool(s) on the DAS suspend (`failmode=wait`); the box
+either hangs ~30 min on the un-syncable pools at the next reboot (capped to 2 min, below) or sits
+with the pool suspended until the watchdog recovers it. After a reboot the encrypted dataset is
+locked again and must be re-unlocked (see the zfs-unlock web UI).
+
+**Root cause (updated 2026-06-12):** *not* the NIC, despite the strong 06-04 correlation. After the
+RTL8153 was deauthorized (commit `21c9777`, so `r8152` never binds), the box wedged again identically
+— during DAS write I/O, with the NIC out of the loop. Config-space probing shows the **TB switch's
+downstream PCIe port (bus `05`) drops off the bus** while the upstream switch `04:00.0` stays alive;
+the fault is the **Thunderbolt controller / DAS USB (UAS) path**, not Ethernet. Full evidence chain,
+the disproven `r8152` mechanism, and the live recovery test are in `../crashes.md` (2026-06-12 entry).
 
 Mitigations in `configuration.nix`:
-- `systemd.services.r8152-disable-tx-offload` — disables TX offloads on `enp7s0u2u4`. **Validated
-  2026-06-04 and FAILED**: with `tso`/`tx-tcp6-segmentation`/`gso` off the box still crashed
-  identically after ~2h. Escalated to the maximal set (`+ sg + tx` off) as a last cheap shot (low
-  odds — the segmentation engine isn't the trigger). Will be removed once the USB NIC is gone.
-- `reboot.target` job timeout cut from the 30-min default to 2 min — **confirmed working**: the
-  2026-06-04 14:16 crash recovered in ~5 min instead of ~30 (`JobTimeoutAction=reboot-force` is the
-  systemd default; we only shortened the timer). Healthy reboots are unaffected. Keep.
-- `reset-thunderbolt-xhci` service + timer reboots the box if the NIC vanishes (safety net; its
-  PCI-reset recovery has never actually succeeded, so it only reboots).
+- `reset-thunderbolt-xhci` service + timer — **auto-heals the wedge** (rewritten 2026-06-12). Detects
+  it device-agnostically by reading PCI config space of the stable TB-upstream switch's children
+  (`ffff` = link down — node presence/driver/power-state all linger and are useless), then recovers
+  by `remove`+`rescan` of `0000:04:00.0` followed by `zpool clear`, only rebooting if that fails. The
+  old version checked for the xHCI node's presence (always true → never fired) and never ran
+  `zpool clear` (so it only ever rebooted).
+- `reboot.target` job timeout cut from the 30-min default to 2 min — **confirmed working**: a crash
+  recovered in ~5 min instead of ~30 (`JobTimeoutAction=reboot-force` is the systemd default; we only
+  shortened the timer). Healthy reboots are unaffected. Keep.
+- `systemd.services.r8152-disable-tx-offload` — disabled TX offloads on `enp7s0u2u4`. **FAILED** (both
+  minimal and maximal sets) and now moot, since the NIC is deauthorized. Vestigial; remove with the
+  NIC config.
 
-Permanent fix (recommended — the offload workaround did not hold): move networking off USB onto a
-**Thunderbolt PCIe NIC** so it no longer shares the storage xHCI. With only two ports (one for
-power) this needs a Thunderbolt **PD dock** that both charges the Mac and carries a PCIe NIC:
-- **OWC Thunderbolt Pro Dock** — 10GbE Aquantia AQC107 (PCIe, kernel `atlantic`), 85 W PD. Top pick.
-- **CalDigit TS4** — 2.5GbE PCIe Realtek RTL8125 (`r8169`), 98 W PD.
-A plain powered USB-C hub (even with PD pass-through) would NOT help — its NIC is still a USB
-Realtek behind the same controller. After switching, the NIC name changes (PCIe `atlantic` ≠
-`enp7s0u2u4`); update the `IFACE` references in `reset-thunderbolt-xhci` / `r8152-disable-tx-offload`.
+Things to try (the fault is the TB controller / DAS USB path, so a Thunderbolt PCIe NIC would *not*
+fix it): move the DAS to the other TB port / a different cable; disable UAS for the DAS
+(`usb-storage.quirks=<vid:pid>:u`, forcing BOT, which some flaky USB-SATA bridges survive); or replace
+the DAS enclosure. The Ethernet adapter is already neutralized, so the earlier "buy a Thunderbolt PCIe
+NIC" recommendation no longer addresses the crash.

@@ -145,3 +145,94 @@ Same root failure (the whole `usb 4-2` tree — NIC `4-2.4` + DAS hub `4-2.3` + 
 (Correction to the record: a mid-investigation note briefly concluded these two reboots were user-initiated/not crashes — that was wrong, caused by grepping only the old `Tx timeout`/`assume dead` strings. They were the same r8152 USB-tree crash, rebooted by the watchdog.)
 
 **Status:** offload service left deployed but ineffective (revert pending). Decision stands: the only real fix is hardware — move Ethernet to a Thunderbolt **PCIe** NIC (CalDigit TS3 Plus, Intel i210 `igb`, ~$100 used; or OWC TB3 Pro Dock / TS4). See Readme.md.
+
+## 2026-06-12 — The NIC was NOT the (sole) trigger; the wedge is the TB controller itself
+
+**The r8152 root-cause from 06-04 is disproven.** Since then the RTL8153 NIC was **deauthorized** at the
+USB level (commit `21c9777`: a udev rule sets `authorized=0` on `0bda:8153` behind hub `05e3:0626`, so
+`r8152` never binds — boot log shows `r8152-cfgselector 4-2.4: Device is not authorized for usage`).
+With the NIC driver completely out of the picture, **the box wedged again, identically:**
+
+```
+Jun 10 16:20  boot; NIC deauthorized at boot (never enumerates)
+Jun 11 09:55:55  xhci_hcd 0000:07:00.0: xHCI host controller not responding, assume dead
+Jun 11 09:55:55  xhci_hcd 0000:07:00.0: HC died; cleaning up
+Jun 11 09:55:55  usb 4-2 / 4-2.2 / ... USB disconnect    (DAS + whole hub tree)
+Jun 11 09:55:56  WARNING: Pool 'firstpool' ... suspended
+```
+
+The crash happened **during heavy WRITE I/O to the DAS** (`sdd`), with no NIC activity possible. So the
+06-04 "100% NIC correlation" was correlation, not causation — the real common factor is the **shared
+JHL6540 Thunderbolt controller / the DAS's UAS path under load**, not the Ethernet adapter. A Thunderbolt
+PCIe NIC would *not* have prevented this. (The NIC may have been *a* trigger among several, but it is not
+necessary.)
+
+**Different signature from the November crashes:** this one logged *only* `assume dead` / `HC died` —
+**no** `Unable to change power state from D3hot to D0` / `inaccessible`. Every parent bridge stayed in
+`power_state=D0, runtime=active`. So the controller hung while fully powered, not during a PM transition.
+
+### What actually changes when the controller is wedged (all the obvious signals are useless)
+
+Probed live while `firstpool` was suspended (~32 h after the crash — the old watchdog never recovered it):
+
+| sysfs signal | when wedged | useful? |
+|---|---|---|
+| `/sys/bus/pci/devices/0000:07:00.0` (node exists) | **present** | NO — lingers |
+| its `driver` symlink | still `xhci_hcd` | NO |
+| `power/runtime_status`, `power_state` | `active`, `D0` (stale) | NO |
+| USB root hubs `usb3`/`usb4` | **present** | NO — lingers |
+| `/sys/block/sdd` | **present** | NO — lingers |
+| **PCI config-space read** of `07:00.0` / `05:0x` | **`ffff ffff`** | **YES** — `8086` when alive |
+| `current_link_speed` of `07:00.0` | **`Unknown`** | yes (2nd choice) |
+| `/proc/spl/kstat/zfs/<pool>/state` | **`SUSPENDED`** | yes (downstream symptom) |
+
+**Where the link breaks:** reading config space up the chain — `00:1c.4`=`8086`, `04:00.0` (TB upstream
+switch)=**`8086` (alive)**, `05:02.0` (its downstream port)=`ffff`, `07:00.0` (xHCI)=`ffff`. So the TB
+switch's *host side stays up*; only its **downstream PCIe port (bus 05) drops off the bus**, taking the
+xHCI and everything below it. The external `uni` hub + DAS + NIC are collateral, not the cause.
+
+### The PCI-reset recovery DOES work — the old script just never finished it
+
+Contrary to the old "PCI-reset recovery never succeeds" note, a live test recovered the bus **without a
+reboot**:
+
+```
+echo 1 > /sys/bus/pci/devices/0000:04:00.0/remove   # drop the alive TB upstream switch + its dead subtree
+echo 1 > /sys/bus/pci/rescan                          # re-train the link
+```
+
+→ the **entire USB tree re-enumerated** (`4-2` hub, `4-2.2` sub-hub, `4-2.2.1..4`, `4-2.4`). The xHCI came
+back at a **different PCI BDF** (`07:00.0` gone during the hot state; a cold reboot restores it). The pool
+stayed `SUSPENDED` only because `zpool clear` had not been run yet.
+
+**The two real bugs in the old `reset-thunderbolt-xhci`:**
+1. **Detection:** `xhci_up()` = `[ -e /sys/bus/pci/devices/0000:07:00.0 ]` was *always true* (the node
+   lingers when the HC dies), so the 1-min timer fired and exited 0 forever — the pool sat suspended ~32 h.
+   It only ever "worked" when something *else* removed `07:00.0`. (In fact, manually removing `04:00.0`
+   during the live test made `07:00.0` vanish, which tripped the old watchdog into rebooting the box — that
+   was the reboot during this session, not a fresh crash.)
+2. **No `zpool clear`:** it removed the *wrong* nodes (the `05:0x` children + `07:00.0`) instead of the
+   alive parent `04:00.0`, and never cleared the suspended pool — so even a good re-enumeration left the
+   pool suspended and it always fell through to `systemctl reboot`. That is why it "only ever rebooted."
+
+### New watchdog (this commit)
+
+Rewrote `reset-thunderbolt-xhci` (`configuration.nix`):
+- **Detection — device-agnostic, assumes nothing is plugged into the hub:** read PCI config space of the
+  stable TB-upstream switch's children (`/sys/bus/pci/devices/0000:04:00.0/0000:*/config`); any `ffff` =
+  link wedged. Anchored on `04:00.0` (fixed BDF, directly under PCH root port `00:1c.4`) rather than the
+  xHCI's own BDF, which moves after a hot rescan. A `SUSPENDED` pool is kept as a backstop signal.
+- **Recovery:** `remove` `04:00.0` → `rescan` → `zpool clear` any suspended pool → re-check; only
+  `systemctl reboot` if the link is still `ffff` or a pool is still suspended. This is the no-reboot path
+  the old script was missing.
+
+### Reframed permanent fix
+
+The NIC is already neutralized and the wedge persists, so the problem is the **Thunderbolt controller /
+DAS USB (UAS) path**, not Ethernet. Avenues worth trying, roughly in order: try the DAS on the *other*
+TB port / a different cable; disable UAS for the DAS (`usb-storage.quirks=<vid:pid>:u`) to fall back to
+BOT, which some flaky USB-SATA bridges survive; consider replacing the DAS enclosure/cable. The rewritten
+watchdog at least auto-heals these wedges in ~1 min instead of leaving the pool suspended indefinitely.
+
+(After this clean reboot `firstpool` is `ONLINE`; it logged 209 transient data errors during the 32 h
+suspension — worth a `zpool scrub firstpool`.)
