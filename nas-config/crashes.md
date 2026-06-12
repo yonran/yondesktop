@@ -236,3 +236,25 @@ watchdog at least auto-heals these wedges in ~1 min instead of leaving the pool 
 
 (After this clean reboot `firstpool` is `ONLINE`; it logged 209 transient data errors during the 32 h
 suspension — worth a `zpool scrub firstpool`.)
+
+### First production recovery (2026-06-12 13:38) — bus recovery confirmed, `zpool clear` timing fixed
+
+The new watchdog handled a real wedge in production. It worked as designed and exposed one timing bug:
+
+```
+13:38:23  detect firstpool SUSPENDED -> removing 0000:04:00.0
+13:38:25  PCI rescan triggered
+13:38:26  USB tree fully re-enumerated (NIC 4-2.4 + all 4 TerraMaster DAS disks 4-2.2.1..4)
+13:38:33  zpool clear firstpool                 (script ran it at rescan +8s)
+13:38:34  "Pool 'firstpool' was suspended and is being resumed" -> immediately re-SUSPENDED (I/O error)
+13:38:46  sd [sdd] Attached SCSI disk           (disks only fully ready here, +21s after rescan)
+13:38:39  recovery failed -> reboot (2-min cap) -> back up 13:43, pools ONLINE
+```
+
+So `remove`+`rescan` of `04:00.0` **does re-enumerate the disks in production** (confirms the manual
+test). But the SCSI/UAS block-device attach lags USB enumeration by ~20 s; the single early
+`zpool clear` resumed the pool onto a not-yet-ready disk, hit I/O error, and re-suspended → false
+"recovery failed" → reboot. **Fix:** `udevadm settle` then retry `zpool clear` in a loop (12×5 s) until
+the pool stays resumed, only rebooting on timeout. With that, this event would have been a no-reboot
+recovery. (Open item: the wedge itself still recurs — root cause in the TB controller / DAS UAS path
+remains unsolved; the watchdog only auto-heals it.)

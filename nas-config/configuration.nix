@@ -90,21 +90,27 @@ let
     printf '1\n' > /sys/bus/pci/rescan
     log "PCI rescan triggered for Thunderbolt hierarchy"
 
-    # Give udev time to rebuild the USB tree and recreate the /dev/disk/by-id
-    # symlinks the pool vdevs are imported under, THEN tell ZFS to retry I/O.
-    # The old script never ran "zpool clear", so even a successful re-enumeration
-    # left the pool SUSPENDED and always fell through to the reboot -- this is the
-    # step that gives the no-reboot recovery path a real chance to succeed.
-    sleep 8
-    mapfile -t SUSPENDED < <(suspended_pools)
-    for p in "''${SUSPENDED[@]}"; do
-      log "clearing suspended pool $p"
-      ${config.boot.zfs.package}/bin/zpool clear "$p" || true
+    # Wait for the re-enumerated DAS to fully re-attach as block devices and for its
+    # /dev/disk/by-id symlinks to reappear, THEN tell ZFS to retry I/O. The SCSI/UAS
+    # disk attach lags USB enumeration by ~20s (observed 2026-06-12: USB re-enumerated
+    # at +1s after rescan but `sd [sdd] Attached SCSI disk` only +21s); a `zpool clear`
+    # issued too early resumes the pool, immediately hits I/O on a not-yet-ready disk,
+    # and re-suspends it. So `udevadm settle` first, then RETRY `zpool clear` until the
+    # pool actually stays resumed (or we give up and reboot). The old script never ran
+    # `zpool clear` at all, so it always fell through to a reboot.
+    ${pkgs.systemd}/bin/udevadm settle --timeout=30 || true
+    for attempt in $(seq 1 12); do
+      mapfile -t SUSPENDED < <(suspended_pools)
+      [ "''${#SUSPENDED[@]}" -eq 0 ] && break
+      for p in "''${SUSPENDED[@]}"; do
+        log "clearing suspended pool $p (attempt $attempt)"
+        ${config.boot.zfs.package}/bin/zpool clear "$p" || true
+      done
+      sleep 5
     done
-    sleep 5
 
     if ! link_wedged && [ -z "$(suspended_pools)" ]; then
-      log "recovery succeeded: PCIe link back and no pool suspended"
+      log "recovery succeeded: PCIe link back and pools resumed"
       exit 0
     fi
 
