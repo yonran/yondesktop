@@ -111,6 +111,10 @@ in
           "--health-timeout=20s"
           "--health-retries=5"
           "--health-start-period=60s"
+          # Kill the container if the healthcheck fails (e.g. the gunicorn worker
+          # wedges during fork at a busy boot) so systemd's Restart=on-failure
+          # brings it back, instead of leaving it unhealthy forever. Mirrors immich-server.
+          "--health-on-failure=kill"
         ];
 
         # systemd dependencies handled separately below
