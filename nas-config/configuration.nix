@@ -1224,6 +1224,10 @@ in
   services.rustdesk-server = {
     enable = true;
     openFirewall = true;
+    # hbbs needs a relay host to hand to clients; without it the module passes an
+    # empty `--relay-servers` and hbbs refuses to start. hbbr runs on this box, so
+    # advertise the public address clients use (relay port 21117 opened above).
+    signal.relayHosts = [ "home.yonathan.org" ];
   };
 
   services.owntracks-recorder.enable = true;
