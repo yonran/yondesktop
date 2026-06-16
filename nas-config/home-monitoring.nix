@@ -254,6 +254,11 @@ in
           http_addr = "0.0.0.0";
           http_port = 3000;
         };
+        # nixpkgs 26.05 removed the built-in default for secret_key. Set the previous
+        # default explicitly so any secrets already encrypted in Grafana's DB keep
+        # decrypting unchanged (this is the same key Grafana was already using).
+        # To rotate later, generate a new key and supply it via a file-provider.
+        security.secret_key = "SW2YcwTIb9zpOOhoPsMm";
       };
     };
 

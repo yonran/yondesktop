@@ -243,7 +243,8 @@ let
   '';
 
   # Dyson integration for Home Assistant
-  libdyson-neon = pkgs.home-assistant.python.pkgs.callPackage ./libdyson-neon.nix { };
+  # nixpkgs 26.05: home-assistant.python.pkgs -> home-assistant.python3Packages
+  libdyson-neon = pkgs.home-assistant.python3Packages.callPackage ./libdyson-neon.nix { };
   dyson-ha = pkgs.callPackage ./dyson-ha.nix {
     buildHomeAssistantComponent = pkgs.buildHomeAssistantComponent;
     inherit libdyson-neon;
@@ -438,8 +439,9 @@ in
   # even though manual standby (hdparm -y) works immediately
   # and even though other drives in the same TDAS TerraMaster USB enclosure support hdparm -S.
   # So do not mount it by default.
-  fileSystems."/stuff" = { device = "/dev/disk/by-uuid/508E-0B16"; options = ["noatime" "nofail" "noauto"]; };
-  fileSystems."/Primary" = { device = "/dev/disk/by-uuid/0AB088281A56593B"; options = ["noatime" "nofail"]; };
+  # fsType is required as of nixpkgs 26.05 (ZFS detection reads every fileSystem's fsType).
+  fileSystems."/stuff" = { device = "/dev/disk/by-uuid/508E-0B16"; fsType = "exfat"; options = ["noatime" "nofail" "noauto"]; };
+  fileSystems."/Primary" = { device = "/dev/disk/by-uuid/0AB088281A56593B"; fsType = "ntfs"; options = ["noatime" "nofail"]; };
 
   networking.hostName = "yonnas"; # Define your hostname. 
  
@@ -648,8 +650,9 @@ in
     partOf = [ "firstpool-family.mount" ];
     unitConfig.RequiresMountsFor = "/firstpool/family";
     serviceConfig = {
-      # File-system lockdown: only write to state/cache/logs; media is read-only
-      ProtectSystem = "strict";
+      # File-system lockdown: only write to state/cache/logs; media is read-only.
+      # mkForce overrides the jellyfin module's own ProtectSystem=true (added in 26.05).
+      ProtectSystem = lib.mkForce "strict";
       ProtectHome = true;
       PrivateTmp = true;
       NoNewPrivileges = true;
@@ -709,8 +712,8 @@ in
     enable = true;
     extraPackages = with pkgs; [
       intel-media-driver # Intel iHD (Gen9+)
-      vaapiIntel         # Intel i965 (older gens)
-      vaapiVdpau
+      intel-vaapi-driver # Intel i965 (older gens); renamed from vaapiIntel in nixpkgs 25.11
+      libva-vdpau-driver # renamed from vaapiVdpau in nixpkgs 25.11
       libvdpau-va-gl
     ];
   };
@@ -758,10 +761,10 @@ in
     enable = true;
     email = "yonathan@gmail.com"; # ACME contact
     # Build Caddy with plugins
-    # NOTE: pkgs.caddy.withPlugins and the hash below are specific to:
-    #   NixOS version: 25.05.813768.fd0ca39c92fd (Warbler)
-    #   nixpkgs commit: fd0ca39c92fd
-    # To regenerate hash after updating NixOS/nixpkgs:
+    # NOTE: the hash below is a vendor hash over the exact plugin versions and the
+    # nixpkgs `caddy.withPlugins` template (currently caddy 2.11.4 on NixOS 26.05),
+    # so it must be regenerated whenever the plugin versions OR NixOS/nixpkgs change.
+    # To regenerate:
     #   1. Set hash to "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     #   2. Run: sudo nixos-rebuild build 2>&1 | grep -A3 'hash mismatch'
     #   3. Update hash with the value shown in "got:"
@@ -769,9 +772,13 @@ in
       plugins = [
         "github.com/mholt/caddy-ratelimit@v0.1.1-0.20250915152450-04ea34edc0c4"
         "github.com/caddy-dns/cloudflare@v0.2.3-0.20251204174556-6dc1fbb7e925"
-        "github.com/greenpau/caddy-security@v1.1.31"
+        # v1.1.57+ resolves caddy-security placeholders ({file.}, {env.}) during
+        # Provision() instead of Caddyfile parse time, which fixes #424 (env-var
+        # placeholders) and #425 (secrets being baked into / exposed by the admin
+        # /config/ API). See https://github.com/greenpau/caddy-security/pull/484
+        "github.com/greenpau/caddy-security@v1.1.62"
       ];
-      hash = "sha256-Qw17KK2Og3/hHGKcVYGRnaDLXBBo4+xlSpPei4doyvg=";
+      hash = "sha256-0QHkLBY103JgZ4BxcITWvqprTi707fMsNWdsyH8nbUs=";
     };
     # Global Caddyfile (must be first). Use globalConfig to emit it at top.
     globalConfig = ''
@@ -791,17 +798,15 @@ in
 
       # Configure caddy-security app: Google OIDC portal and policy
       security {
-        # Define Google OAuth2 IdP using shortcut (client_id client_secret)
-        # TODO: caddy-security doesn't support {file.{$VAR}} syntax due to early parsing https://github.com/greenpau/caddy-security/issues/424
-        # Should be: {file.{$GOOGLE_CLIENT_ID_FILE}} {file.{$GOOGLE_CLIENT_SECRET_FILE}}
-        oauth identity provider google {file./run/credentials/caddy.service/google_client_id} {file./run/credentials/caddy.service/google_client_secret}
+        # Define Google OAuth2 IdP using shortcut (client_id client_secret).
+        # {$VAR} is expanded at Caddyfile-adapt time to the credential file path;
+        # caddy-security resolves the outer {file.} during Provision() (v1.1.57+).
+        oauth identity provider google {file.{$GOOGLE_CLIENT_ID_FILE}} {file.{$GOOGLE_CLIENT_SECRET_FILE}}
 
         # Authentication portal issues/validates tokens; requires a signing key
           authentication portal myportal {
             # Provide a signing key from file
-            # TODO: caddy-security doesn't support {file.{$VAR}} syntax due to early parsing https://github.com/greenpau/caddy-security/issues/424
-            # Should be: {file.{$AUTH_SIGN_KEY_FILE}}
-            crypto key sign-verify {file./run/credentials/caddy.service/auth_sign_key}
+            crypto key sign-verify {file.{$AUTH_SIGN_KEY_FILE}}
             enable identity provider google
           }
 
@@ -809,9 +814,7 @@ in
           authorization policy mypolicy {
             set auth url /auth/
             set redirect query parameter redirect_url
-            # TODO: caddy-security doesn't support {file.{$VAR}} syntax due to early parsing https://github.com/greenpau/caddy-security/issues/424
-            # Should be: {file.{$AUTH_SIGN_KEY_FILE}}
-            crypto key verify {file./run/credentials/caddy.service/auth_sign_key}
+            crypto key verify {file.{$AUTH_SIGN_KEY_FILE}}
             allow email yonathan@gmail.com nosiri@gmail.com
           }
       }
@@ -1069,7 +1072,8 @@ in
   # don't sleep when the lid is shut (requires reboot)
   services.logind.lidSwitchExternalPower = "ignore";
 
-  virtualisation.docker.enable = true;
+  # docker daemon dropped: containers run under podman (see oci-containers below),
+  # the docker daemon had 0 containers/images, and nixpkgs 26.05 deprecates docker_28.
   virtualisation.podman = {
     enable = true;
     # Required for containers under podman-compose to be able to talk to each other.

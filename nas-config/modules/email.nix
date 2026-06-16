@@ -47,11 +47,12 @@ in {
         let
           base = {
             inet_interfaces = "loopback-only"; # local-only SMTP submission
-            mydestination = "";               # no domain-based local delivery
+            mydestination = [ ];              # no domain-based local delivery (listOf str in 26.05)
             local_header_rewrite_clients = "permit_mynetworks";
           };
           relay = if cfg.relay.enable then {
-            relayhost = "[${cfg.relay.host}]:${toString cfg.relay.port}";
+            # relayhost became a listOf str in nixpkgs 26.05
+            relayhost = [ "[${cfg.relay.host}]:${toString cfg.relay.port}" ];
             smtp_sasl_auth_enable = "yes";
             smtp_sasl_security_options = "noanonymous";
             smtp_sasl_password_maps = "texthash:/etc/postfix/sasl_passwd";
