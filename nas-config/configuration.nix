@@ -98,13 +98,20 @@ let
     # and re-suspends it. So `udevadm settle` first, then RETRY `zpool clear` until the
     # pool actually stays resumed (or we give up and reboot). The old script never ran
     # `zpool clear` at all, so it always fell through to a reboot.
+    #
+    # `timeout` wraps each clear because `zpool clear` can block in uninterruptible D
+    # state when a pool is suspended mid-`zfs send|recv` (observed 2026-06-13: a clear
+    # wedged for 40h, hanging this whole oneshot so it never reached the reboot below
+    # and the timer could never re-run). NOTE: a true D-state process ignores the kill,
+    # so `timeout` may not return either -- the real backstop is the service-level
+    # TimeoutStartSec + OnFailure=reboot.target (see systemd.services below).
     ${pkgs.systemd}/bin/udevadm settle --timeout=30 || true
     for attempt in $(seq 1 12); do
       mapfile -t SUSPENDED < <(suspended_pools)
       [ "''${#SUSPENDED[@]}" -eq 0 ] && break
       for p in "''${SUSPENDED[@]}"; do
         log "clearing suspended pool $p (attempt $attempt)"
-        ${config.boot.zfs.package}/bin/zpool clear "$p" || true
+        timeout 25 ${config.boot.zfs.package}/bin/zpool clear "$p" || true
       done
       sleep 5
     done
@@ -116,6 +123,59 @@ let
 
     log "recovery failed; rebooting to clear wedged Thunderbolt controller"
     ${pkgs.systemd}/bin/systemctl reboot
+  '';
+
+  # Recover the Broadcom BCM4350 WiFi (0000:02:00.0, brcmfmac) when it fails to probe at boot.
+  #
+  # WHY: WiFi (wlp2s0) is this headless box's ONLY remote path (the USB NIC is deauthorized). After a
+  # *forced* reboot -- e.g. the xHCI watchdog / reboot.target 2-min cap killing services because a ZFS
+  # pool is suspended (observed 2026-06-14) -- the card's PCIe interface re-enumerates normally (config
+  # space + BARs + bridge window all identical to a good boot, no AER/link/power errors) but the chip
+  # CORE behind the BAR is left unreset: every MMIO read returns 0xffffffff, so
+  # `brcmf_chip_recognition` can't read the chip id, `brcmf_pcie_probe` aborts, and no wlp2s0 is
+  # created -> the box is stranded off-network until someone is physically present. A graceful reboot
+  # resets the chip and it comes up fine; the forced reboot doesn't.
+  #
+  # FIX: 02:00.0 reports `reset_method: bus`, so writing its `reset` does a secondary-bus reset
+  # (PERST# on the link) -- a real chip reset that a plain rescan cannot do. Wait for the normal probe
+  # first; only if wlp2s0 is still absent after ~30s do we bus-reset + remove + rescan to re-probe the
+  # now-reset chip. The wlp2s0-absent guard means this can NEVER reset a working WiFi (so it's a no-op
+  # on healthy boots and during a deploy). Best-effort: if all attempts fail the box is no worse off.
+  restoreWifiScript = pkgs.writeShellScript "restore-wifi" ''
+    #!${pkgs.bash}/bin/bash
+    set -uo pipefail
+    DEV="0000:02:00.0"
+    log() { printf '%s\n' "$1"; }
+
+    # Give the normal brcmfmac probe time to bring wlp2s0 up; exit untouched if it does.
+    for i in $(seq 1 15); do
+      [ -e /sys/class/net/wlp2s0 ] && exit 0
+      sleep 2
+    done
+
+    log "wlp2s0 still absent ~30s after boot; attempting WiFi PCIe recovery on $DEV"
+    for attempt in 1 2 3; do
+      if [ -e "/sys/bus/pci/devices/$DEV/reset" ]; then
+        log "secondary-bus reset of $DEV (attempt $attempt)"
+        printf '1\n' > "/sys/bus/pci/devices/$DEV/reset" || true
+        sleep 2
+      fi
+      if [ -e "/sys/bus/pci/devices/$DEV/remove" ]; then
+        printf '1\n' > "/sys/bus/pci/devices/$DEV/remove" || true
+        sleep 2
+      fi
+      printf '1\n' > /sys/bus/pci/rescan || true
+      for i in $(seq 1 10); do
+        if [ -e /sys/class/net/wlp2s0 ]; then
+          log "wlp2s0 recovered after attempt $attempt"
+          exit 0
+        fi
+        sleep 2
+      done
+    done
+
+    log "WiFi recovery failed after 3 attempts; wlp2s0 still absent"
+    exit 1
   '';
 
   hdparmSetScript = pkgs.writeShellScript "hdparm-set" ''
@@ -1117,9 +1177,31 @@ in
   # always rebooted; the NIC trigger went moot once the RTL8153 was deauthorized.)
   systemd.services.reset-thunderbolt-xhci = {
     description = "Auto-recover wedged Thunderbolt xHCI (PCIe link down -> remove/rescan -> zpool clear)";
+    # Backstop against the script blocking forever: if a recovery step hangs (e.g.
+    # `zpool clear` stuck in uninterruptible D state when a pool is suspended mid
+    # `zfs send|recv` -- observed 2026-06-13 hanging this oneshot for 40h, which also
+    # blocked the timer from ever re-running), TimeoutStartSec fails the unit and
+    # OnFailure reboots. 200s comfortably exceeds a healthy recovery (udevadm settle
+    # <=30s + ~12x5s clear retries), so it only fires on a real hang.
+    onFailure = [ "reboot.target" ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = resetThunderboltXhci;
+      TimeoutStartSec = 200;
+    };
+  };
+
+  # Recover WiFi if brcmfmac fails to probe at boot (see restoreWifiScript above). Runs once per boot;
+  # it waits for the normal probe and only resets the card if wlp2s0 is still missing, so it is a
+  # no-op on healthy boots. wantedBy multi-user.target without an `after` ordering on it (the script
+  # does its own wait), so it cannot deadlock the boot.
+  systemd.services.restore-wifi = {
+    description = "Recover Broadcom WiFi (02:00.0) if brcmfmac probe failed (MMIO ffff after a forced reboot)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-pre.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = restoreWifiScript;
     };
   };
 
