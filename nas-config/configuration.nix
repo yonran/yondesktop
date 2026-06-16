@@ -1134,7 +1134,7 @@ in
     #   https://www.freedesktop.org/software/systemd/man/latest/systemd.device.html
     # Note: you could have used "hdparm-set@%k.service", and then specify /dev/%I in the template file,
     # but SYSTEMD_WANTS supports this alternate method
-    ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", TAG+="hdparmset", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hdparm-set@%k.service"
+    ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ATTR{queue/rotational}=="1", TAG+="hdparmset", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hdparm-set@%k.service"
     # Prevent the Intel JHL6540 Thunderbolt controller (parent of the USB NIC/HDDs) from entering runtime D3.
     # Without this, the logs show "pcieport 0000:05:04.0: Unable to change power state from D3hot to D0, device inaccessible"
     # immediately followed by "xhci_hcd 0000:07:00.0: xHCI host controller not responding, assume dead".
