@@ -1228,6 +1228,11 @@ in
     # empty `--relay-servers` and hbbs refuses to start. hbbr runs on this box, so
     # advertise the public address clients use (relay port 21117 opened above).
     signal.relayHosts = [ "home.yonathan.org" ];
+    # Enforce the server key (--key _ uses the generated id_ed25519 keypair). Without
+    # this the server is an open relay: anyone who reaches it can register/relay.
+    # With it, only clients configured with the public key can use the server.
+    signal.extraArgs = [ "--key" "_" ];
+    relay.extraArgs = [ "--key" "_" ];
   };
 
   services.owntracks-recorder.enable = true;
