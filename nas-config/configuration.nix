@@ -1099,6 +1099,22 @@ in
 
   # Immich services will start automatically via proper systemd dependencies
 
+  # --- Battery longevity / thermal (MacBookPro14,1 runs 24/7 on AC; see battery.md) ---
+  # The internal Li-ion pack is held at 100% and warm, which ages it and risks swelling.
+  # There is NO Linux charge-limit knob on this Intel Mac: applesmc exposes the SMC BCLM
+  # key read-only, and the ACPI battery has no charge-control method (details in battery.md).
+  # So heat control + monitoring are the in-repo mitigations; charge-limiting (smart-plug via
+  # Home Assistant) or physically disconnecting the pack are the out-of-repo options.
+  #
+  # Run the fan proactively to keep the logic board (and the adjacent battery) cooler. The fan
+  # otherwise sits at 0 rpm on SMC's conservative auto curve. mbpfan's aggressive defaults suit
+  # this machine: ramp from 58C, full at 78C, auto-detected 1200-7200 rpm (fan1_min/fan1_max).
+  services.mbpfan.enable = true;
+  # Optional: cap peak CPU heat (Intel turbo is currently fully on). Jellyfin transcodes via
+  # VAAPI, so a turbo cap barely affects real workload; trade-off is slightly slower CPU-bound
+  # bursts. Uncomment to limit the P-state to 80% and lower peak temps near the battery:
+  # systemd.tmpfiles.rules = [ "w /sys/devices/system/cpu/intel_pstate/max_perf_pct - - - - 80" ];
+
   # spin down spinning disks
   # https://www.reddit.com/r/NixOS/comments/751i5t/how_to_specify_that_hard_disks_should_spin_down/
   powerManagement.powerUpCommands = with pkgs; ''

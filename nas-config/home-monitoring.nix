@@ -227,6 +227,35 @@ in
               annotations:
                 summary: "High UDMA CRC errors on {{ $labels.device }}"
                 description: "Many CRC errors indicate cabling or port issues. Check SATA cable/port and power."
+          # Battery health/heat early warning for the MacBookPro14,1 pack held at 100% 24/7.
+          # node_exporter's powersupplyclass collector exports these for BAT0. See battery.md.
+          # Expressions return empty (no alert) if the battery is later disconnected.
+          - name: battery
+            rules:
+            - alert: BatteryOverheatWarn
+              expr: node_power_supply_temp_celsius{power_supply="BAT0"} >= 40
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Battery running hot (>=40C)"
+                description: "BAT0 temperature is {{ $value }}C. Sustained heat ages the Li-ion pack and raises swelling risk. Check cooling/workload (see battery.md)."
+            - alert: BatteryOverheatCrit
+              expr: node_power_supply_temp_celsius{power_supply="BAT0"} >= 45
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Battery too hot (>=45C)"
+                description: "BAT0 temperature is {{ $value }}C. Reduce load / improve cooling now; consider disconnecting the pack (see battery.md)."
+            - alert: BatteryHealthLow
+              expr: (node_power_supply_charge_full{power_supply="BAT0"} / node_power_supply_charge_full_design{power_supply="BAT0"}) < 0.8
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: "Battery health below 80%"
+                description: "BAT0 full-charge capacity is {{ $value | humanizePercentage }} of design. Degrading pack -- inspect for swelling and consider replacement/disconnect (see battery.md)."
         '')
       ];
     };
