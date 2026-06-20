@@ -1,0 +1,112 @@
+--- a/applesmc.c	2026-06-20 15:47:47
++++ applesmc.c	2026-06-20 15:48:14
+@@ -33,6 +33,7 @@
+ #include <linux/workqueue.h>
+ #include <linux/err.h>
+ #include <linux/bits.h>
++#include <acpi/battery.h>
+ 
+ /* data port used by Apple SMC */
+ #define APPLESMC_DATA_PORT	0x300
+@@ -1305,7 +1306,80 @@
+ 	},
+ 	{ .ident = NULL }
+ };
++
++/*
++ * Battery charge limit.
++ *
++ * The SMC "BCLM" key ("Battery Charge Level Max") is a ui8 percentage that caps
++ * how full the battery charges; this is the same lever macOS battery-management
++ * tools (bclm/AlDente) use. Mainline applesmc exposes SMC keys read-only, so this
++ * adds the standard power_supply "charge_control_end_threshold" sysfs attribute on
++ * the battery and wires it to BCLM, e.g.:
++ *
++ *	echo 80 > /sys/class/power_supply/BAT0/charge_control_end_threshold
++ *
++ * We attach via the ACPI battery hook (battery_hook_register), which replays for
++ * batteries that already registered before this module loaded, so it works
++ * regardless of load order. It is a no-op on Macs without the BCLM key.
++ */
++#define CHARGE_LIMIT_KEY "BCLM"
++
++static bool applesmc_has_charge_limit;
++
++static ssize_t charge_control_end_threshold_show(struct device *dev,
++		struct device_attribute *attr, char *buf)
++{
++	u8 val;
++	int ret;
+ 
++	ret = applesmc_read_key(CHARGE_LIMIT_KEY, &val, 1);
++	if (ret)
++		return ret;
++	return sysfs_emit(buf, "%u\n", val);
++}
++
++static ssize_t charge_control_end_threshold_store(struct device *dev,
++		struct device_attribute *attr, const char *buf, size_t count)
++{
++	u8 val;
++	int ret;
++
++	ret = kstrtou8(buf, 10, &val);
++	if (ret)
++		return ret;
++	/* Refuse nonsensical caps; a too-low ceiling could leave the pack empty. */
++	if (val < 10 || val > 100)
++		return -EINVAL;
++
++	ret = applesmc_write_key(CHARGE_LIMIT_KEY, &val, 1);
++	if (ret)
++		return ret;
++	return count;
++}
++
++static DEVICE_ATTR_RW(charge_control_end_threshold);
++
++static int applesmc_battery_add(struct power_supply *battery,
++		struct acpi_battery_hook *hook)
++{
++	return device_create_file(&battery->dev,
++				  &dev_attr_charge_control_end_threshold);
++}
++
++static int applesmc_battery_remove(struct power_supply *battery,
++		struct acpi_battery_hook *hook)
++{
++	device_remove_file(&battery->dev,
++			   &dev_attr_charge_control_end_threshold);
++	return 0;
++}
++
++static struct acpi_battery_hook applesmc_battery_hook = {
++	.add_battery = applesmc_battery_add,
++	.remove_battery = applesmc_battery_remove,
++	.name = "applesmc battery charge limit",
++};
++
+ static int __init applesmc_init(void)
+ {
+ 	int ret;
+@@ -1368,6 +1442,11 @@
+ 		goto out_light_ledclass;
+ 	}
+ 
++	/* Expose charge_control_end_threshold (BCLM) only if this Mac has the key. */
++	if (!applesmc_has_key(CHARGE_LIMIT_KEY, &applesmc_has_charge_limit) &&
++	    applesmc_has_charge_limit)
++		battery_hook_register(&applesmc_battery_hook);
++
+ 	return 0;
+ 
+ out_light_ledclass:
+@@ -1397,6 +1476,8 @@
+ 
+ static void __exit applesmc_exit(void)
+ {
++	if (applesmc_has_charge_limit)
++		battery_hook_unregister(&applesmc_battery_hook);
+ 	hwmon_device_unregister(hwmon_dev);
+ 	applesmc_release_key_backlight();
+ 	applesmc_release_light_sensor();
