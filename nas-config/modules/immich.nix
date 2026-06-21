@@ -5,7 +5,7 @@ let
   # Define variables from environment file
   UPLOAD_LOCATION = "/firstpool/family/immich/photos";
   DB_DATA_LOCATION = "/firstpool/family/immich/postgres";
-  IMMICH_VERSION = "v2.6.3";
+  IMMICH_VERSION = "v2.7.5";
   DB_PASSWORD = "postgres";
   DB_USERNAME = "postgres";
   DB_DATABASE_NAME = "immich";
@@ -23,6 +23,7 @@ in
       DB_PASSWORD=${DB_PASSWORD}
       IMMICH_HOST=0.0.0.0
       IMMICH_LOG_LEVEL=debug
+      IMMICH_HELMET_FILE=true
       DB_USERNAME=${DB_USERNAME}
       DB_DATABASE_NAME=${DB_DATABASE_NAME}
       DB_STORAGE_TYPE=HDD
