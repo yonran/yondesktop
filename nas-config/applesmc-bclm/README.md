@@ -1,19 +1,21 @@
 # applesmc-bclm — battery charge limit for the Intel MacBook Pro NAS
 
-Patched `applesmc` that exposes a writable charge-limit knob backed by the SMC
-`BCLM` key ("Battery Charge Level Max"). This is the software charge cap that
+Patched `applesmc` that exposes the standard `power_supply` charge-limit knob backed by
+the SMC `BCLM` key ("Battery Charge Level Max"). This is the software charge cap that
 mainline Linux does not provide on Intel Macs (see `../battery.md` for why).
 
 ```sh
-cat   /sys/devices/platform/applesmc.768/charge_control_end_threshold   # current cap (100 = no limit)
-echo 80 > /sys/devices/platform/applesmc.768/charge_control_end_threshold   # cap charging at 80%
+cat   /sys/class/power_supply/BAT0/charge_control_end_threshold   # current cap (100 = no limit)
+echo 80 > /sys/class/power_supply/BAT0/charge_control_end_threshold   # cap charging at 80%
 ```
 
-**Status: tested working on this NAS (`MacBookPro14,1`, kernel 6.18.35).** Writing 80
-set the SMC `BCLM` key to 80 (verified independently via the `key_at_index` dump),
-charging stopped (`current_now=0`), and **the value persists in the SMC** — it still
-read 80 after unloading the patched module and restoring the stock driver. So the cap
-stays in effect without the patched module needing to remain loaded.
+**Status: tested working on this NAS (`MacBookPro14,1`, kernel 6.18.35).** Loading the
+module exposes the knob at the standard location above; writing 80 sets the SMC `BCLM`
+key to 80 (verified independently via the `key_at_index` dump). End-to-end: with the cap
+at 80, on AC the battery charged up and **stopped at the cap** (`status=Full`,
+`current_now=0`, gauge `capacity=79%`) instead of going to 100%. `BCLM` also **persists
+in the SMC** — it still read 80 after unloading the patched module and restoring the
+stock driver, so the cap stays in effect without the patched module remaining loaded.
 
 ## What the patch does
 
@@ -22,21 +24,24 @@ stays in effect without the patched module needing to remain loaded.
 
 - Adds a `charge_control_end_threshold` show/store that reads/writes the `BCLM` ui8
   key (validated to 10–100).
-- Creates that attribute **on applesmc's own platform device**
-  (`/sys/devices/platform/applesmc.768/`), guarded by `applesmc_has_key("BCLM")` so
-  it's a no-op on Macs without the key.
+- Creates that attribute on **`BAT0`'s `power_supply` device** — the standard location
+  (`/sys/class/power_supply/BAT0/`) that tools like TLP and upower expect — by looking
+  the battery up with `power_supply_get_by_name`, plus a `power_supply` notifier to
+  attach if the battery registers after applesmc loads. Guarded by
+  `applesmc_has_key("BCLM")`, so it's a no-op on Macs without the key.
 
-### Why the platform device and not `/sys/class/power_supply/BAT0/`
+### Why look the battery up instead of forking `sbs`
 
 On this Mac, `BAT0` is a **Smart Battery (ACPI `ACPI0002`, owned by `sbs.ko`)**, not a
-control-method battery (`PNP0C0A`/`battery.ko`). Mainline `sbs.c` has **no** battery-hook
-API to attach a sysfs attribute to (only the control-method `battery.c` exports
-`battery_hook_register`). The first attempt used `battery_hook_register` and failed to
-load (`Unknown symbol`, because `battery.ko` isn't even used here). `applesmc-next`
-works around this by shipping a *forked* `sbs`/`sbshc` — which is exactly the part that
-oopses on several Intel Macs, so we avoid it. Writing `BCLM` is a pure SMC operation
-independent of how the battery is read, so hanging the knob off applesmc's platform
-device works regardless and adds no module dependencies.
+control-method battery (`PNP0C0A`/`battery.ko`). The clean upstream way to add a
+charge-threshold attribute to a battery is the ACPI battery hook
+(`battery_hook_register`) — but that's exported by `battery.c`, which **isn't used here**
+(a first attempt with it failed to load: `Unknown symbol battery_hook_register`).
+Mainline `sbs.c` has **no** hook API. `applesmc-next` works around this by shipping a
+*forked* `sbs`/`sbshc` — which is the part that oopses on several Intel Macs — so we
+avoid it. Instead we attach via `power_supply_get_by_name("BAT0")`, which still lands the
+attribute at the standard path and touches neither `sbs` nor `battery`. (A strictly
+upstream-proper version would add a hook API to `sbs.c`; this avoids that for safety.)
 
 The vendored `applesmc.c` is stock `v6.18` (pristine sha256 `2fc482268abf12…`) plus
 `bclm.patch`. On a kernel upgrade where upstream applesmc changes, re-fetch the new
@@ -61,7 +66,7 @@ to write the value:
 ```sh
 KO=$(nix-build --no-out-link -E 'let s=import <nixpkgs/nixos> {}; in s.config.boot.kernelPackages.callPackage ./default.nix {}')/lib/modules/6.18.35/misc/applesmc.ko
 sudo rmmod applesmc && sudo insmod "$KO"          # swap in the patched driver
-echo 80 | sudo tee /sys/devices/platform/applesmc.768/charge_control_end_threshold
+echo 80 | sudo tee /sys/class/power_supply/BAT0/charge_control_end_threshold
 sudo rmmod applesmc && sudo modprobe applesmc     # back to the stock driver; BCLM stays 80
 ```
 

@@ -32,8 +32,9 @@ bridges read-out to control:
   `…/PNP0C09:00/ACPI0001:00/ACPI0002:00/power_supply/BAT0` (HID `ACPI0002` = **Smart
   Battery (SBS)**, owned by `sbs.ko`/`sbshc.ko` — *not* the control-method
   `battery.ko`). There is **no** `charge_control_*_threshold` file — Apple's firmware
-  exposes no ACPI charge-limit method. (Note: `sbs.c` has no battery-hook API, which is
-  why the charge-limit knob below is attached to applesmc's platform device instead.)
+  exposes no ACPI charge-limit method. (Note: `sbs.c` has no battery-hook API, so the
+  charge-limit knob below attaches by looking the battery up with
+  `power_supply_get_by_name` instead of via a hook.)
 - **The charge *lever* is an SMC key**, owned by `applesmc` — but `applesmc` is an
   **hwmon** driver (fans/temps/accelerometer/light). It does not implement the
   `power_supply` charge-control properties. Its generic SMC-key sysfs interface
@@ -80,14 +81,16 @@ needs a patched driver.
 
 ### Our write path: `applesmc-bclm` (built, tested, in use)
 
-`./applesmc-bclm/` is a minimal out-of-tree patch to `applesmc` that adds
-`charge_control_end_threshold` (backed by `BCLM`) on applesmc's platform device. On
-**2026-06-20 it was tested on this box**: loading it, writing `80`, and confirming via
-the independent `key_at_index` dump that the SMC `BCLM` key became `80`, charging
-stopped (`current_now=0`), and — crucially — **`BCLM` persists in the SMC** after the
-patched module is unloaded and the stock driver restored. So the cap is currently set
-to **80%** and active under the stock driver. See `./applesmc-bclm/README.md` for the
-set/change procedure and persistence options.
+`./applesmc-bclm/` is a minimal out-of-tree patch to `applesmc` that adds the standard
+`power_supply` `charge_control_end_threshold` attribute (backed by `BCLM`) on
+`/sys/class/power_supply/BAT0/` — attached by looking the battery up with
+`power_supply_get_by_name` (no `sbs`/`battery` hook). Tested on this box: writing `80`
+sets the SMC `BCLM` key to `80` (confirmed via the independent `key_at_index` dump);
+end-to-end, on AC the battery charged and **stopped at the cap** (`status=Full`,
+`current_now=0`, gauge `capacity=79%`) instead of reaching 100%; and **`BCLM` persists
+in the SMC** after unloading the patched module and restoring the stock driver. So the
+cap is currently set to **80%** and active under the stock driver. See
+`./applesmc-bclm/README.md` for the set/change procedure and persistence options.
 
 ### Out-of-tree alternative we did NOT use: `applesmc-next`
 
@@ -98,7 +101,7 @@ we rejected it because, as shipped, it:
    and mainline `sbs.c` has no hook API), and that forked `sbshc` is exactly what
    **kernel-oopses** on several non-T2 Intel Macs / 7.x kernels (issues #14/#15) —
    unacceptable on an unattended server. `applesmc-bclm` sidesteps this entirely by
-   hanging the knob off applesmc's platform device, touching neither `sbs` nor `battery`.
+   looking the battery up by name, touching neither `sbs` nor `battery`.
 2. Has **no tested report on `MacBookPro14,1`**.
 
 ## Mitigation plan

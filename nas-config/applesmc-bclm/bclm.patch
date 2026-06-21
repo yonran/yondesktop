@@ -1,25 +1,37 @@
---- a/applesmc.c	2026-06-20 15:47:47
-+++ b/applesmc.c	2026-06-20 17:19:05
-@@ -1306,6 +1306,60 @@
+--- a/applesmc.c	2026-06-21 02:23:06
++++ b/applesmc.c	2026-06-21 02:22:50
+@@ -33,6 +33,8 @@
+ #include <linux/workqueue.h>
+ #include <linux/err.h>
+ #include <linux/bits.h>
++#include <linux/power_supply.h>
++#include <linux/notifier.h>
+ 
+ /* data port used by Apple SMC */
+ #define APPLESMC_DATA_PORT	0x300
+@@ -1305,7 +1307,111 @@
+ 	},
  	{ .ident = NULL }
  };
- 
++
 +/*
 + * Battery charge limit.
 + *
 + * The SMC "BCLM" key ("Battery Charge Level Max") is a ui8 percentage that caps
 + * how full the battery charges; this is the same lever macOS battery-management
 + * tools (bclm/AlDente) use. Mainline applesmc exposes SMC keys read-only, so this
-+ * adds a charge_control_end_threshold attribute wired to BCLM, e.g.:
++ * adds the standard power_supply charge_control_end_threshold attribute, e.g.:
 + *
-+ *	echo 80 > /sys/devices/platform/applesmc.768/charge_control_end_threshold
++ *	echo 80 > /sys/class/power_supply/BAT0/charge_control_end_threshold
 + *
-+ * The attribute lives on applesmc's own platform device rather than on the battery
-+ * power_supply: on these Macs BAT0 is a Smart Battery (ACPI0002, owned by sbs.ko),
-+ * and mainline sbs has no battery-hook API to attach to (only the control-method
-+ * battery.c does). Writing BCLM is a pure SMC operation, independent of how the
-+ * battery is read, so the platform-device location works regardless. It is created
-+ * only on Macs that actually have the BCLM key.
++ * On these Macs BAT0 is a Smart Battery (ACPI0002, owned by sbs.ko), and mainline
++ * sbs has no battery-hook API (only the control-method battery.c exports
++ * battery_hook_register). Rather than fork sbs (what applesmc-next does, which oopses
++ * on some Macs), we look the battery up by name and create the attribute on its
++ * power_supply device, so it appears at the standard location that tools (TLP,
++ * upower, ...) expect. A power_supply notifier handles the battery registering after
++ * applesmc loads. Writing BCLM is a pure SMC op, independent of how the battery is
++ * read. No-op on Macs without the BCLM key.
 + */
 +#define CHARGE_LIMIT_KEY "BCLM"
 +
@@ -30,7 +42,7 @@
 +{
 +	u8 val;
 +	int ret;
-+
+ 
 +	ret = applesmc_read_key(CHARGE_LIMIT_KEY, &val, 1);
 +	if (ret)
 +		return ret;
@@ -58,29 +70,79 @@
 +
 +static DEVICE_ATTR_RW(charge_control_end_threshold);
 +
++static DEFINE_MUTEX(applesmc_battery_lock);
++static struct power_supply *applesmc_battery;	/* held ref while the attr exists */
++
++/* Create charge_control_end_threshold on BAT0's power_supply device. Idempotent. */
++static void applesmc_attach_battery(void)
++{
++	struct power_supply *psy;
++
++	mutex_lock(&applesmc_battery_lock);
++	if (applesmc_battery)
++		goto out;			/* already attached */
++	psy = power_supply_get_by_name("BAT0");
++	if (!psy)
++		goto out;			/* not present yet; notifier will retry */
++	if (device_create_file(&psy->dev, &dev_attr_charge_control_end_threshold)) {
++		power_supply_put(psy);
++		goto out;
++	}
++	applesmc_battery = psy;			/* keep the ref while the attr is live */
++out:
++	mutex_unlock(&applesmc_battery_lock);
++}
++
++static void applesmc_detach_battery(void)
++{
++	mutex_lock(&applesmc_battery_lock);
++	if (applesmc_battery) {
++		device_remove_file(&applesmc_battery->dev,
++				   &dev_attr_charge_control_end_threshold);
++		power_supply_put(applesmc_battery);
++		applesmc_battery = NULL;
++	}
++	mutex_unlock(&applesmc_battery_lock);
++}
++
++/* Only PSY_EVENT_PROP_CHANGED exists; any battery activity is our cue to (re)try
++ * attaching if we haven't managed to yet. attach is a no-op once done. */
++static int applesmc_psy_notify(struct notifier_block *nb, unsigned long event,
++			       void *data)
++{
++	applesmc_attach_battery();
++	return NOTIFY_OK;
++}
++
++static struct notifier_block applesmc_psy_nb = {
++	.notifier_call = applesmc_psy_notify,
++};
++
  static int __init applesmc_init(void)
  {
  	int ret;
-@@ -1368,6 +1422,12 @@
+@@ -1368,6 +1474,13 @@
  		goto out_light_ledclass;
  	}
  
 +	/* Expose charge_control_end_threshold (BCLM) only if this Mac has the key. */
 +	if (!applesmc_has_key(CHARGE_LIMIT_KEY, &applesmc_has_charge_limit) &&
-+	    applesmc_has_charge_limit)
-+		device_create_file(&pdev->dev,
-+				   &dev_attr_charge_control_end_threshold);
++	    applesmc_has_charge_limit) {
++		applesmc_attach_battery();		/* attach now if BAT0 is present */
++		power_supply_reg_notifier(&applesmc_psy_nb);	/* else when it appears */
++	}
 +
  	return 0;
  
  out_light_ledclass:
-@@ -1397,6 +1457,9 @@
+@@ -1397,6 +1510,10 @@
  
  static void __exit applesmc_exit(void)
  {
-+	if (applesmc_has_charge_limit)
-+		device_remove_file(&pdev->dev,
-+				   &dev_attr_charge_control_end_threshold);
++	if (applesmc_has_charge_limit) {
++		power_supply_unreg_notifier(&applesmc_psy_nb);
++		applesmc_detach_battery();
++	}
  	hwmon_device_unregister(hwmon_dev);
  	applesmc_release_key_backlight();
  	applesmc_release_light_sensor();
