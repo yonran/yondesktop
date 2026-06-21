@@ -140,6 +140,49 @@ Ordered best-first.
   `capacity` (via the existing MQTT broker) and toggles the charger to cycle 60–80%.
   Superseded by `applesmc-bclm`, which needs no extra hardware.
 
+## Experiment: lower mbpfan ramp for battery cooling (2026-06-21)
+
+**Hypothesis.** Ramping the fan earlier (mbpfan `lowTemp/highTemp/maxTemp` 45/50/70,
+down from the 55/58/78 defaults) keeps the logic board cooler and, via reduced
+heat-soak, lowers the battery temperature. Expected effect: small — the battery is not
+in the fan's airflow path and its temperature is floored by room ambient.
+
+**Method.** mbpfan watches **coretemp** (confirmed via its open fds:
+`/sys/devices/platform/coretemp.0/.../temp1_input`), not the battery. Captured an idle
+baseline, redeployed with the new curve, then drove a ~40 s all-core load (`yes` ×4)
+while sampling `coretemp` (temp1) vs `fan1_input`. Battery temp from
+`/sys/class/power_supply/BAT0/temp`. Track the longer-term effect in the **Battery (NAS)**
+Grafana dashboard.
+
+**Data.**
+
+| State | coretemp | fan rpm | battery |
+| --- | --- | --- | --- |
+| Baseline, idle (old 55/58/78) | 49 °C | 1200 (min) | 28.4 °C |
+| New curve, idle | 49 °C | 1200 (min) | 28.3 °C |
+| New curve, under load | 61→73 °C | 2735 → ~6500 | 28.4 °C (unchanged) |
+
+Load ramp (new curve): 61 °C→2735, 66→3781, 69→5382, 70→6143, ≥70→~6500 (near the
+7200 max, since `maxTemp=70`).
+
+**Findings.**
+- **No change at idle** — coretemp (~49 °C, mbpfan likely averages the 3 core sensors to
+  ~47 °C) stays below the 50 °C ramp point, so the fan holds at the 1200 rpm floor. Fine:
+  the battery is already 28 °C, so there is nothing to cool.
+- **Under load the fan ramps earlier and harder** — it spins up as soon as coretemp
+  crosses ~50 °C and is near max by 70 °C, vs the old 58 °C / 78 °C. This is the case that
+  matters (transcode, immich ML, ZFS scrubs heat the board for minutes–hours).
+- **Battery is buffered from short spikes** — it stayed 28.4 °C through the 40 s load. Any
+  battery benefit comes only from *sustained* load and is expected to be ≤ a couple °C.
+
+**Open question / how to evaluate.** Whether the earlier fan ramp measurably lowers the
+battery during real sustained workloads (nightly scrub, transcoding) — watch
+`node_power_supply_temp_celsius{BAT0}` vs `node_hwmon_temp_celsius{coretemp}` on the
+dashboard over the next days. Trade-off to revisit: `maxTemp=70` makes the fan reach full
+sooner, so sustained jobs are louder; raise it back toward 78 if the noise isn't worth the
+(likely small) battery delta. The alert (`BatteryWarm`/`BatteryHot`) remains the safety net
+regardless of fan tuning.
+
 ## References
 
 - Mainline applesmc (no charge control): <https://github.com/torvalds/linux/blob/master/drivers/hwmon/applesmc.c>
