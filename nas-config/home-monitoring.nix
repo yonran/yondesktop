@@ -256,6 +256,24 @@ in
               annotations:
                 summary: "Battery health below 80%"
                 description: "BAT0 full-charge capacity is {{ $value | humanizePercentage }} of design. Degrading pack -- inspect for swelling and consider replacement/disconnect (see battery.md)."
+            # Low-battery / mains-outage alerts. Scoped to AC offline (ADP1 online == 0) so
+            # they fire only on a real power outage -- normally the pack sits at the ~80% cap.
+            - alert: BatteryDischargingLow
+              expr: node_power_supply_capacity{power_supply="BAT0"} <= 40 and on() node_power_supply_online{power_supply="ADP1"} == 0
+              for: 2m
+              labels:
+                severity: warning
+              annotations:
+                summary: "NAS on battery, charge {{ $value }}% (mains outage)"
+                description: "AC adapter is offline and BAT0 has fallen to {{ $value }}%. The NAS is running on battery and will shut down when the pack is exhausted."
+            - alert: BatteryCriticallyLow
+              expr: node_power_supply_capacity{power_supply="BAT0"} <= 15 and on() node_power_supply_online{power_supply="ADP1"} == 0
+              for: 1m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Battery critically low ({{ $value }}%) on battery power"
+                description: "AC offline and BAT0 at {{ $value }}%. Imminent unclean shutdown if mains power is not restored."
         '')
       ];
     };
@@ -288,6 +306,20 @@ in
         # decrypting unchanged (this is the same key Grafana was already using).
         # To rotate later, generate a new key and supply it via a file-provider.
         security.secret_key = "SW2YcwTIb9zpOOhoPsMm";
+      };
+      # Declaratively provision dashboards from ./grafana-dashboards/*.json. These show
+      # up read-only in a "nas" folder. The dashboards bind to whatever Prometheus
+      # datasource is the default (via a datasource template variable), so this does not
+      # touch the manually-configured datasource.
+      provision = {
+        enable = true;
+        dashboards.settings.providers = [
+          {
+            name = "nas";
+            type = "file";
+            options.path = "${./grafana-dashboards}";
+          }
+        ];
       };
     };
 
