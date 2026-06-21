@@ -1164,6 +1164,12 @@ in
     # uni USB-C hub (05e3:0626). Deauthorizing prevents r8152 from binding, so it can
     # never crash the shared xHCI. Scoped to this hub so r8152 still works on other ports.
     ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0bda", ATTR{idProduct}=="8153", ATTRS{idVendor}=="05e3", ATTRS{idProduct}=="0626", ATTR{authorized}="0"
+    # Auto-authorize the CalDigit TS3 Plus dock. The Thunderbolt security level is "user"
+    # and we run no boltd, so the dock otherwise enumerates at authorized=0 -> the PCIe
+    # tunnel never comes up -> no i210 NIC (enp70s0) AND the DAS never appears, so the ZFS
+    # pools fail to import at boot. Scoped to this dock's TB IDs (vendor 0x3d = CalDigit,
+    # device 0x11 = TS3 Plus; unique_id c8010000-0070-7718-a3c0-2d8ce8638802).
+    ACTION=="add", SUBSYSTEM=="thunderbolt", ATTR{vendor}=="0x3d", ATTR{device}=="0x11", ATTR{authorized}=="0", ATTR{authorized}="1"
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x15d4", TEST=="power/control", ATTR{power/control}="on"
     # The Nov 23/24/25 failures showed the bridges (05:01/05:02/05:04, vendor 0x8086/device 0x15d3) hit D3hot first,
     # so force them to stay "on" too; otherwise the XHCI fix alone has no effect because the parent bus vanishes.
