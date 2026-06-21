@@ -1101,10 +1101,10 @@ in
 
   # --- Battery longevity / thermal (MacBookPro14,1 runs 24/7 on AC; see battery.md) ---
   # The internal Li-ion pack is held at 100% and warm, which ages it and risks swelling.
-  # There is NO Linux charge-limit knob on this Intel Mac: applesmc exposes the SMC BCLM
-  # key read-only, and the ACPI battery has no charge-control method (details in battery.md).
-  # So heat control + monitoring are the in-repo mitigations; charge-limiting (smart-plug via
-  # Home Assistant) or physically disconnecting the pack are the out-of-repo options.
+  # Charge is now capped at 80% via the SMC BCLM key, using the patched applesmc in
+  # ./applesmc-bclm/ (the cap persists in the SMC; wiring a boot-time re-assert into this
+  # config is a follow-up). The settings below are the complementary heat + monitoring
+  # mitigations (details + fallback options in battery.md).
   #
   # Run the fan proactively to keep the logic board (and the adjacent battery) cooler. The fan
   # otherwise sits at 0 rpm on SMC's conservative auto curve. mbpfan's aggressive defaults suit

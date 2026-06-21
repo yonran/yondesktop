@@ -22,15 +22,18 @@ Battery is healthy now — there is a comfortable window to act before degradati
 | `temp` | ~30 °C | ACPI battery |
 | manufacturer / model | DSY / `bq20z451` | ACPI battery |
 
-## Why there is no native Linux charge limit on this Mac
+## Why there is no *native* Linux charge limit (and how we added one)
 
-Two different drivers are involved, and neither bridges read-out to control:
+Mainline Linux exposes no charge cap on this Mac; we added one out-of-tree
+(`applesmc-bclm`, below). Two different drivers are involved upstream, and neither
+bridges read-out to control:
 
 - **Battery *read-out* comes from ACPI**, not applesmc: `BAT0` lives at
-  `…/PNP0C09:00/ACPI0001:00/ACPI0002:00/power_supply/BAT0` (HID `ACPI0002`, ACPI
-  Control-Method Battery, `drivers/acpi/battery.c`). There is **no**
-  `charge_control_start_threshold` / `charge_control_end_threshold` file — Apple's
-  firmware exposes no ACPI charge-limit method.
+  `…/PNP0C09:00/ACPI0001:00/ACPI0002:00/power_supply/BAT0` (HID `ACPI0002` = **Smart
+  Battery (SBS)**, owned by `sbs.ko`/`sbshc.ko` — *not* the control-method
+  `battery.ko`). There is **no** `charge_control_*_threshold` file — Apple's firmware
+  exposes no ACPI charge-limit method. (Note: `sbs.c` has no battery-hook API, which is
+  why the charge-limit knob below is attached to applesmc's platform device instead.)
 - **The charge *lever* is an SMC key**, owned by `applesmc` — but `applesmc` is an
   **hwmon** driver (fans/temps/accelerometer/light). It does not implement the
   `power_supply` charge-control properties. Its generic SMC-key sysfs interface
@@ -72,40 +75,43 @@ Relevant keys found (2026-06-20):
 | `ACLM` | `ui16` | — | AC current limit. |
 | `B0FC` / `B0DC` | `ui16` | 4966 / 4850 | SMC full / design capacity — cross-checks the ACPI `charge_full`/`_design`. |
 
-So the lever physically exists and currently reads "no limit." The only gap is that
-mainline `applesmc` lets us *read* `BCLM` but not *write* it.
+So the lever physically exists. Mainline `applesmc` can only *read* `BCLM`; writing it
+needs a patched driver.
 
-### Out-of-tree write path (NOT used — too risky for a 24/7 box)
+### Our write path: `applesmc-bclm` (built, tested, in use)
 
-`applesmc-next` (DKMS, <https://github.com/c---/applesmc-next>) patches applesmc to write
-`BCLM` and create `charge_control_end_threshold`. We rejected it because, as shipped, it:
+`./applesmc-bclm/` is a minimal out-of-tree patch to `applesmc` that adds
+`charge_control_end_threshold` (backed by `BCLM`) on applesmc's platform device. On
+**2026-06-20 it was tested on this box**: loading it, writing `80`, and confirming via
+the independent `key_at_index` dump that the SMC `BCLM` key became `80`, charging
+stopped (`current_now=0`), and — crucially — **`BCLM` persists in the SMC** after the
+patched module is unloaded and the stock driver restored. So the cap is currently set
+to **80%** and active under the stock driver. See `./applesmc-bclm/README.md` for the
+set/change procedure and persistence options.
 
-1. Hooks `sbs_hook_register()` (SMBus Smart Battery), but our `BAT0` is an ACPI
-   Control-Method battery on `drivers/acpi/battery.c` — a different hook list, so the
-   sysfs file never appears without the unmerged issue #16 patch.
-2. Bundles a forked `sbs`/`sbshc` that kernel-**oopses** on several non-T2 Intel Macs
-   and on 7.x kernels (issues #14/#15) — unacceptable on an unattended server.
-3. Has **no tested report on `MacBookPro14,1`**.
+### Out-of-tree alternative we did NOT use: `applesmc-next`
+
+`applesmc-next` (DKMS, <https://github.com/c---/applesmc-next>) also writes `BCLM`, but
+we rejected it because, as shipped, it:
+
+1. Ships a **forked `sbs`/`sbshc`** to add a battery hook (our `BAT0` is an SBS battery
+   and mainline `sbs.c` has no hook API), and that forked `sbshc` is exactly what
+   **kernel-oopses** on several non-T2 Intel Macs / 7.x kernels (issues #14/#15) —
+   unacceptable on an unattended server. `applesmc-bclm` sidesteps this entirely by
+   hanging the knob off applesmc's platform device, touching neither `sbs` nor `battery`.
+2. Has **no tested report on `MacBookPro14,1`**.
 
 ## Mitigation plan
 
-Ordered best-first. The first two are out-of-repo (hardware/HA) decisions; the rest are
-implemented in this repo.
+Ordered best-first.
 
-1. **Physically disconnect / remove the pack (definitive).** For a 24/7 AC server the
-   battery is pure liability. Disconnecting the battery connector eliminates the
-   held-at-100%-hot aging and the swelling/fire risk entirely.
-   - ⚠️ Caveat: 2016–2017 Intel MBPs are known to **throttle the CPU hard** with no
-     battery present (the SMC limits current draw from the charger alone). Test whether
-     the NAS workload tolerates it before committing.
+1. **Charge limit via `applesmc-bclm` (implemented; primary).** Cap set to **80%**
+   (`BCLM`), persists in the SMC under the stock driver. This directly fixes the
+   held-at-100% aging without removing the battery. See `./applesmc-bclm/README.md` for
+   how it was built/tested and the persistence options (it's set in the SMC now; wiring
+   a boot-time re-assert into NixOS is the remaining follow-up).
 
-2. **Smart-plug + Home Assistant charge band (best software-only).** Put the charger on
-   a smart plug; HA reads `BAT0` `capacity` (publish over the existing MQTT broker) and
-   switches the charger **off at ~80%, on at ~60%**. The pack then cycles gently in the
-   ideal 60–80% band, never sits at 100%, and stays connected (no CPU throttle). Needs
-   one smart plug.
-
-3. **Thermal — keep the pack cool (implemented).** Heat drives both capacity fade and
+2. **Thermal — keep the pack cool (implemented).** Heat drives both capacity fade and
    swelling, and the cells sit right under the logic board.
    - `services.mbpfan.enable = true` (in `configuration.nix`). The fan was idle (0 rpm)
      under SMC's conservative auto curve; mbpfan runs it proactively (aggressive default:
@@ -114,13 +120,22 @@ implemented in this repo.
      `max_perf_pct` to ~80 to cut peak temps. Jellyfin transcodes via VAAPI so real
      workload is barely affected; trade-off is slightly slower CPU-bound bursts.
 
-4. **Monitoring / early warning (implemented).** node_exporter already exports
+3. **Monitoring / early warning (implemented).** node_exporter already exports
    `node_power_supply_*` for `BAT0`. Alert rules added in `home-monitoring.nix`:
    - `BatteryOverheatWarn` ≥ 40 °C / `BatteryOverheatCrit` ≥ 45 °C (sustained heat =
      swelling precursor).
    - `BatteryHealthLow`: `charge_full / charge_full_design < 0.8` (degrading pack —
      inspect for swelling, consider replacement/disconnect).
    These expressions return empty (don't fire) if the battery is later disconnected.
+
+### Fallback options (not needed now that the charge limit works)
+
+- **Physically disconnect / remove the pack (definitive).** Eliminates the swelling/fire
+  risk entirely. ⚠️ 2016–2017 Intel MBPs **throttle the CPU hard** with no battery
+  present (SMC limits current draw from the charger alone), so test workload tolerance.
+- **Smart-plug + Home Assistant charge band.** Charger on a smart plug; HA reads `BAT0`
+  `capacity` (via the existing MQTT broker) and toggles the charger to cycle 60–80%.
+  Superseded by `applesmc-bclm`, which needs no extra hardware.
 
 ## References
 
