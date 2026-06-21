@@ -1253,8 +1253,11 @@ in
 
   services.owntracks-recorder.enable = true;
 
-  # ZFS unlock web GUI (socket-activated, OIDC-protected)
+  # ZFS unlock web GUI (socket-activated, OIDC-protected). One passphrase entry
+  # unlocks both the live data and the backup pool (delegation set per dataset
+  # via `zfs allow` - see modules/zfs-unlock-web.nix header).
   services.zfs-unlock-web.enable = true;
+  services.zfs-unlock-web.datasets = [ "firstpool/family" "backuppool/family_backup" ];
 
 
   # Copy the NixOS configuration file and link it from the resulting system

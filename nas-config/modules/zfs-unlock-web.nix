@@ -4,8 +4,11 @@
 # datasets. Authentication is handled by Caddy (Google OIDC), and the service
 # runs as an unprivileged user.
 #
-# Required one-time setup (run as root after pool import):
+# Required one-time setup (run as root once per dataset; the delegation is
+# stored on the pool and persists across reboots/re-imports). For every dataset
+# in services.zfs-unlock-web.datasets:
 #   zfs allow -u zfs-unlock load-key,mount firstpool/family
+#   zfs allow -u zfs-unlock load-key,mount backuppool/family_backup
 { config, lib, pkgs, ... }:
 
 let
@@ -36,16 +39,14 @@ in {
   options.services.zfs-unlock-web = {
     enable = lib.mkEnableOption "ZFS unlock web GUI";
 
-    dataset = lib.mkOption {
-      type = lib.types.str;
-      default = "firstpool/family";
-      description = "The ZFS dataset to unlock";
-    };
-
-    mountUnit = lib.mkOption {
-      type = lib.types.str;
-      default = "firstpool-family.mount";
-      description = "The systemd mount unit to start after loading the key";
+    datasets = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "firstpool/family" ];
+      description = ''
+        ZFS datasets the web UI can unlock and mount. One submitted passphrase
+        is tried against every still-locked dataset. Each dataset also needs
+        'zfs allow -u <user> load-key,mount <dataset>' delegation (see header).
+      '';
     };
 
     socketPath = lib.mkOption {
@@ -88,24 +89,25 @@ in {
     security.sudo.extraRules = [
       {
         users = [ cfg.user ];
-        commands = [
-          {
-            command = "/run/current-system/sw/bin/zfs mount ${cfg.dataset}";
+        commands =
+          (map (ds: {
+            command = "/run/current-system/sw/bin/zfs mount ${ds}";
             options = [ "NOPASSWD" ];
-          }
-          {
-            command = "/run/current-system/sw/bin/systemctl start immich-stack.target";
-            options = [ "NOPASSWD" ];
-          }
-          {
-            command = "/run/current-system/sw/bin/systemctl start jellyfin.service";
-            options = [ "NOPASSWD" ];
-          }
-          {
-            command = "/run/current-system/sw/bin/systemctl start samba-smbd.service";
-            options = [ "NOPASSWD" ];
-          }
-        ];
+          }) cfg.datasets)
+          ++ [
+            {
+              command = "/run/current-system/sw/bin/systemctl start immich-stack.target";
+              options = [ "NOPASSWD" ];
+            }
+            {
+              command = "/run/current-system/sw/bin/systemctl start jellyfin.service";
+              options = [ "NOPASSWD" ];
+            }
+            {
+              command = "/run/current-system/sw/bin/systemctl start samba-smbd.service";
+              options = [ "NOPASSWD" ];
+            }
+          ];
       }
     ];
 
@@ -135,6 +137,8 @@ in {
       environment = {
         # Set Flask to production mode
         FLASK_ENV = "production";
+        # Datasets the app manages (comma-separated); read in __init__.py
+        ZFS_UNLOCK_DATASETS = lib.concatStringsSep "," cfg.datasets;
         # Python path for uwsgi to find Flask and the app
         PYTHONPATH = "${pythonEnv}/${pkgs.python3.sitePackages}:${zfs-unlock-web}/${pkgs.python3.sitePackages}";
       };

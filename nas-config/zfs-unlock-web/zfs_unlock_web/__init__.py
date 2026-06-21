@@ -17,11 +17,21 @@ app = Flask(__name__)
 # Secret key for flash messages - in production, this is set via environment
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-only-change-in-prod')
 
-# Configuration
-DATASET = "firstpool/family"
-MOUNT_UNIT = "firstpool-family.mount"
+# Configuration: datasets to manage, in order. Set via ZFS_UNLOCK_DATASETS
+# (comma-separated) by the NixOS module; falls back to the primary dataset.
+# One submitted passphrase is tried against every still-locked dataset, so a
+# shared passphrase unlocks them all in one go; otherwise resubmit per dataset.
+DATASETS = [
+    d.strip()
+    for d in os.environ.get("ZFS_UNLOCK_DATASETS", "firstpool/family").split(",")
+    if d.strip()
+]
 
-# Dependent services to show status for
+# The dataset whose mount gates the dependent services below (the live data;
+# the backup pool has no services to start).
+SERVICE_DATASET = "firstpool/family"
+
+# Dependent services to show status for / start once SERVICE_DATASET is mounted.
 DEPENDENT_SERVICES = [
     "podman-immich-server.service",
     "podman-immich-database.service",
@@ -47,22 +57,22 @@ def run_command(cmd, stdin_data=None):
         return False, "", str(e)
 
 
-def get_keystatus():
-    """Get the key status of the ZFS dataset (available, unavailable)."""
+def get_keystatus(dataset):
+    """Get the key status of a ZFS dataset (available, unavailable)."""
     # zfs get doesn't require privileges - any user can read properties
     success, stdout, stderr = run_command(
-        ["zfs", "get", "-H", "-o", "value", "keystatus", DATASET]
+        ["zfs", "get", "-H", "-o", "value", "keystatus", dataset]
     )
     if success:
         return stdout.strip()
     return "unknown"
 
 
-def get_mounted():
-    """Check if the ZFS dataset is mounted."""
+def get_mounted(dataset):
+    """Check if a ZFS dataset is mounted."""
     # zfs get doesn't require privileges - any user can read properties
     success, stdout, stderr = run_command(
-        ["zfs", "get", "-H", "-o", "value", "mounted", DATASET]
+        ["zfs", "get", "-H", "-o", "value", "mounted", dataset]
     )
     if success:
         return stdout.strip() == "yes"
@@ -77,47 +87,64 @@ def get_service_status(service):
     return stdout.strip() if success else "unknown"
 
 
-def load_key(passphrase):
-    """Load the encryption key for the ZFS dataset."""
-    # Requires 'zfs allow -u zfs-unlock load-key,mount firstpool/family'
+def load_key(dataset, passphrase):
+    """Load the encryption key for a ZFS dataset.
+
+    Relies on 'zfs allow -u zfs-unlock load-key,mount <dataset>' delegation,
+    so no sudo is needed here.
+    """
     success, stdout, stderr = run_command(
-        ["zfs", "load-key", DATASET],
+        ["zfs", "load-key", dataset],
         stdin_data=passphrase,
     )
     return success, stderr
 
 
-def start_mount():
-    """Mount the ZFS dataset and start dependent services.
-
-    Uses sudo for zfs mount (Linux requires root for mount syscall),
-    then starts the immich-stack target which brings up dependent services.
-    """
+def mount_dataset(dataset):
+    """Mount a ZFS dataset (sudo: Linux requires root for the mount syscall)."""
     success, stdout, stderr = run_command(
-        ["sudo", "/run/current-system/sw/bin/zfs", "mount", DATASET]
+        ["sudo", "/run/current-system/sw/bin/zfs", "mount", dataset]
     )
+    return success, stderr
 
-    if not success:
-        return success, stderr
 
-    # Start the immich stack and other services that depend on this mount
-    run_command(
-        ["sudo", "/run/current-system/sw/bin/systemctl", "start", "immich-stack.target"]
-    )
-    run_command(
-        ["sudo", "/run/current-system/sw/bin/systemctl", "start", "jellyfin.service"]
-    )
-    run_command(
-        ["sudo", "/run/current-system/sw/bin/systemctl", "start", "samba-smbd.service"]
-    )
-    return True, ""
+def start_dependent_services():
+    """Start services that depend on SERVICE_DATASET being mounted."""
+    for unit in ["immich-stack.target", "jellyfin.service", "samba-smbd.service"]:
+        run_command(
+            ["sudo", "/run/current-system/sw/bin/systemctl", "start", unit]
+        )
+
+
+def mount_all_and_start_services():
+    """Mount any unlocked-but-unmounted dataset, then start dependent services."""
+    for dataset in DATASETS:
+        if get_keystatus(dataset) == "available" and not get_mounted(dataset):
+            success, error = mount_dataset(dataset)
+            if success:
+                flash(f"{dataset}: mounted", "success")
+            else:
+                flash(f"{dataset}: failed to mount: {error.strip()}", "error")
+
+    if get_mounted(SERVICE_DATASET):
+        start_dependent_services()
 
 
 @app.route("/")
 def index():
     """Show status page with unlock form if needed."""
-    keystatus = get_keystatus()
-    mounted = get_mounted()
+    datasets = [
+        {
+            "name": dataset,
+            "keystatus": get_keystatus(dataset),
+            "mounted": get_mounted(dataset),
+        }
+        for dataset in DATASETS
+    ]
+    any_locked = any(d["keystatus"] == "unavailable" for d in datasets)
+    any_unmounted = any(
+        d["keystatus"] == "available" and not d["mounted"] for d in datasets
+    )
 
     services_status = {}
     for service in DEPENDENT_SERVICES:
@@ -125,52 +152,43 @@ def index():
 
     return render_template(
         "index.html",
-        dataset=DATASET,
-        keystatus=keystatus,
-        mounted=mounted,
+        datasets=datasets,
+        any_locked=any_locked,
+        any_unmounted=any_unmounted,
         services=services_status,
     )
 
 
 @app.route("/unlock", methods=["POST"])
 def unlock():
-    """Handle unlock form submission."""
+    """Handle unlock form submission.
+
+    Tries the submitted passphrase against every still-locked dataset, then
+    mounts whatever is unlocked and starts dependent services.
+    """
     passphrase = request.form.get("passphrase", "")
 
     if not passphrase:
         flash("Passphrase is required", "error")
         return redirect(url_for("index"))
 
-    keystatus = get_keystatus()
+    for dataset in DATASETS:
+        if get_keystatus(dataset) == "unavailable":
+            success, error = load_key(dataset, passphrase)
+            if success:
+                flash(f"{dataset}: key loaded", "success")
+            else:
+                flash(f"{dataset}: failed to load key: {error.strip()}", "error")
 
-    # Only load key if not already loaded
-    if keystatus == "unavailable":
-        success, error = load_key(passphrase)
-        if not success:
-            flash(f"Failed to load key: {error}", "error")
-            return redirect(url_for("index"))
-        flash("Key loaded successfully", "success")
-
-    # Start the mount unit to mount and trigger dependent services
-    mounted = get_mounted()
-    if not mounted:
-        success, error = start_mount()
-        if not success:
-            flash(f"Failed to start mount: {error}", "error")
-            return redirect(url_for("index"))
-        flash("Dataset mounted and services starting", "success")
+    mount_all_and_start_services()
 
     return redirect(url_for("index"))
 
 
 @app.route("/mount", methods=["POST"])
 def mount():
-    """Handle mount request (when key is loaded but not mounted)."""
-    success, error = start_mount()
-    if not success:
-        flash(f"Failed to start mount: {error}", "error")
-    else:
-        flash("Dataset mounted and services starting", "success")
+    """Handle mount request (when keys are loaded but datasets not mounted)."""
+    mount_all_and_start_services()
     return redirect(url_for("index"))
 
 
