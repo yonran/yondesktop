@@ -8,27 +8,14 @@
   "refresh": "1m",
   "timezone": "browser",
   "time": { "from": "now-7d", "to": "now" },
-  "templating": {
-    "list": [
-      {
-        "name": "DS_PROMETHEUS",
-        "label": "Datasource",
-        "type": "datasource",
-        "query": "prometheus",
-        "current": {},
-        "hide": 0,
-        "refresh": 1,
-        "regex": ""
-      }
-    ]
-  },
+  "templating": { "list": [] },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Charge",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
       "fieldConfig": {
         "defaults": {
           "unit": "percent", "min": 0, "max": 100,
@@ -45,7 +32,7 @@
         "colorMode": "value", "graphMode": "area", "textMode": "auto"
       },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
           "expr": "node_power_supply_capacity{power_supply=\"BAT0\"}", "legendFormat": "charge" }
       ]
     },
@@ -54,7 +41,7 @@
       "type": "stat",
       "title": "Health (full / design)",
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
       "fieldConfig": {
         "defaults": {
           "unit": "percent", "min": 0, "max": 110,
@@ -71,7 +58,7 @@
         "colorMode": "value", "graphMode": "none", "textMode": "auto"
       },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
           "expr": "100 * node_power_supply_charge_full{power_supply=\"BAT0\"} / node_power_supply_charge_full_design{power_supply=\"BAT0\"}",
           "legendFormat": "health" }
       ]
@@ -81,14 +68,14 @@
       "type": "stat",
       "title": "Cycle count",
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "colorMode": "none", "graphMode": "none", "textMode": "auto"
       },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
           "expr": "node_power_supply_cyclecount{power_supply=\"BAT0\"}", "legendFormat": "cycles" }
       ]
     },
@@ -97,7 +84,7 @@
       "type": "stat",
       "title": "Temperature",
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
       "fieldConfig": {
         "defaults": {
           "unit": "celsius",
@@ -114,7 +101,7 @@
         "colorMode": "value", "graphMode": "area", "textMode": "auto"
       },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
           "expr": "node_power_supply_temp_celsius{power_supply=\"BAT0\"}", "legendFormat": "temp" }
       ]
     },
@@ -123,7 +110,7 @@
       "type": "timeseries",
       "title": "Charge level (%)",
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
       "fieldConfig": {
         "defaults": {
           "unit": "percent", "min": 0, "max": 100,
@@ -133,7 +120,7 @@
       },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
           "expr": "node_power_supply_capacity{power_supply=\"BAT0\"}", "legendFormat": "charge %" }
       ]
     },
@@ -142,7 +129,7 @@
       "type": "timeseries",
       "title": "Temperature (°C)",
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
       "fieldConfig": {
         "defaults": {
           "unit": "celsius",
@@ -152,7 +139,7 @@
       },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
           "expr": "node_power_supply_temp_celsius{power_supply=\"BAT0\"}", "legendFormat": "battery temp" }
       ]
     },
@@ -161,7 +148,7 @@
       "type": "timeseries",
       "title": "Current (A)  ·  AC online",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 13 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
       "fieldConfig": {
         "defaults": {
           "unit": "amp",
@@ -174,9 +161,9 @@
       },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
           "expr": "node_power_supply_current_ampere{power_supply=\"BAT0\"}", "legendFormat": "current" },
-        { "refId": "B", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "e78ddc4a-caf4-4969-982c-6d4ac0372cff" },
           "expr": "node_power_supply_online{power_supply=\"ADP1\"}", "legendFormat": "AC online" }
       ]
     }
