@@ -1,4 +1,8 @@
-
+-- Synced to the LIVE function on 2026-06-21 (Immich v2.7.5 schema).
+-- NOTE: schema is the modern singular naming: table "album_asset" with columns
+-- "albumId"/"assetId", "asset"."visibility" enum ('archive'), NOT the old
+-- "albums_assets_assets"/"albumsId"/"isArchived". Applied manually via psql:
+--   sudo podman exec -i immich-database psql -U postgres -d immich -f <thisfile>
 
 CREATE OR REPLACE FUNCTION yon_exclusive_archiving_albums()
 RETURNS TRIGGER AS $$
@@ -38,41 +42,45 @@ DECLARE
         '5550d003-ca4b-4222-b525-2350a4d889bd', -- car 2018 tesla
         'a8991760-3b7c-4ff3-9236-8188e9a66b59', -- receipts
         -- '827f3b3b-1819-4e7f-b1c6-8057b9c379e7', -- museums
-        'e679df33-299a-4a24-8582-5569b0e4988e'  -- shopping
-
+        'e679df33-299a-4a24-8582-5569b0e4988e', -- shopping
+        '272cf7a7-bf1c-4d7c-94b9-cb6ba6e72057', -- oyster mushrooms 2026-05
+        '59f9a296-1420-4a5d-bd0c-01e7d495de69', -- medical: yon
+        'aa29e34b-9f35-43fc-9234-fab95cd04ba4', -- mechanize.work
+        '755fc578-0a15-4131-b34a-121c7104aa11'  -- 7528A sump pump
     ]::UUID[];
 BEGIN
     -- Check if the inserted album is one of our special albums
-    IF NEW."albumsId" = ANY(special_album_ids) THEN
+    IF NEW."albumId" = ANY(special_album_ids) THEN
         -- Get the asset owner ID
         SELECT "ownerId" INTO asset_owner_id
-        FROM "assets"
-        WHERE "id" = NEW."assetsId";
-        
+        FROM "asset"
+        WHERE "id" = NEW."assetId";
+
         -- Get the album owner ID
         SELECT "ownerId" INTO album_owner_id
-        FROM "albums"
-        WHERE "id" = NEW."albumsId";
-        
+        FROM "album"
+        WHERE "id" = NEW."albumId";
+
         -- Only proceed if the asset owner and album owner match
         IF asset_owner_id = album_owner_id THEN
             -- Remove the asset from all other albums
-            DELETE FROM "albums_assets_assets"
-            WHERE "assetsId" = NEW."assetsId"
-            AND "albumsId" != NEW."albumsId";
-            
+            DELETE FROM "album_asset"
+            WHERE "assetId" = NEW."assetId"
+            AND "albumId" != NEW."albumId";
+
             -- Archive the asset
-            UPDATE "assets"
-            SET "isArchived" = true
-            WHERE "id" = NEW."assetsId";
+            UPDATE "asset"
+            SET "visibility" = 'archive'
+            WHERE "id" = NEW."assetId";
         END IF;
     END IF;
-    
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS yon_exclusive_archiving_albums ON "album_asset";
 CREATE TRIGGER yon_exclusive_archiving_albums
-AFTER INSERT ON "albums_assets_assets"
+AFTER INSERT ON "album_asset"
 FOR EACH ROW
 EXECUTE FUNCTION yon_exclusive_archiving_albums();
