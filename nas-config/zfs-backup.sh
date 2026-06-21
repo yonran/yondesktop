@@ -51,9 +51,17 @@ else
 fi
 
 
-# Cleanup snapshots from source pool, keeping only the last 7
-zfs list -t snapshot -s creation -H -o name "${source_pool}/${source_fs}" | \
-    grep "^${source_pool}/${source_fs}@backup-" | head -n -7 | \
-    while read snapshot; do zfs destroy $snapshot; done
-# TODO: Cleanup snapshots from backup pool
-# see https://openzfs.github.io/openzfs-docs/man/master/8/zfs-rename.8.html#Example_2_:_Performing_a_Rolling_Snapshot
+# Cleanup snapshots from the source pool, keeping those created within the last
+# RETENTION_DAYS. The just-created snapshot is always newer than the cutoff, so
+# it survives as the base for the next incremental even after a long outage.
+# This pruning propagates to the backup pool automatically: the `zfs send -R`
+# replication stream above destroys on the destination any snapshot we drop here.
+RETENTION_DAYS=30
+cutoff=$(( $(date +%s) - RETENTION_DAYS * 86400 ))
+zfs list -t snapshot -Hp -s creation -o creation,name "${source_pool}/${source_fs}" | \
+    grep "${source_pool}/${source_fs}@backup-" | \
+    while read -r creation snapshot; do
+      if [ "$creation" -lt "$cutoff" ]; then
+        zfs destroy "$snapshot"
+      fi
+    done
