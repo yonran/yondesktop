@@ -1107,9 +1107,15 @@ in
   # mitigations (details + fallback options in battery.md).
   #
   # Run the fan proactively to keep the logic board (and the adjacent battery) cooler. The fan
-  # otherwise sits at 0 rpm on SMC's conservative auto curve. mbpfan's aggressive defaults suit
-  # this machine: ramp from 58C, full at 78C, auto-detected 1200-7200 rpm (fan1_min/fan1_max).
+  # otherwise sits at 0 rpm on SMC's conservative auto curve. We ramp earlier than mbpfan's
+  # defaults (55/58/78): start spinning up at 45C and reach full by 70C, so the chassis -- and
+  # the battery via reduced heat-soak -- runs cooler. Auto-detected 1200-7200 rpm range. Note
+  # the fan cools the CPU/heatsink, not the battery directly, so this helps the pack only
+  # indirectly (a degree or two); battery temp is ultimately floored by room ambient.
   services.mbpfan.enable = true;
+  services.mbpfan.lowTemp = 45;   # below this: minimum fan
+  services.mbpfan.highTemp = 50;  # start ramping here
+  services.mbpfan.maxTemp = 70;   # full speed at/above here
   # Optional: cap peak CPU heat (Intel turbo is currently fully on). Jellyfin transcodes via
   # VAAPI, so a turbo cap barely affects real workload; trade-off is slightly slower CPU-bound
   # bursts. Uncomment to limit the P-state to 80% and lower peak temps near the battery:

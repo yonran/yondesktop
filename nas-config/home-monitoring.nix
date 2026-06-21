@@ -232,22 +232,25 @@ in
           # Expressions return empty (no alert) if the battery is later disconnected.
           - name: battery
             rules:
-            - alert: BatteryOverheatWarn
-              expr: node_power_supply_temp_celsius{power_supply="BAT0"} >= 40
-              for: 10m
+            # Thresholds target longevity, not just safety: Li-ion calendar aging roughly
+            # doubles per +10C, and >35C already causes accelerated/permanent capacity loss
+            # (ideal 20-25C). The pack idles ~28-30C, so 35C warn is above normal but not noisy.
+            - alert: BatteryWarm
+              expr: node_power_supply_temp_celsius{power_supply="BAT0"} >= 35
+              for: 30m
               labels:
                 severity: warning
               annotations:
-                summary: "Battery running hot (>=40C)"
-                description: "BAT0 temperature is {{ $value }}C. Sustained heat ages the Li-ion pack and raises swelling risk. Check cooling/workload (see battery.md)."
-            - alert: BatteryOverheatCrit
-              expr: node_power_supply_temp_celsius{power_supply="BAT0"} >= 45
-              for: 5m
+                summary: "Battery warm ({{ $value }}C, >=35)"
+                description: "BAT0 has been at/above 35C, the accelerated-aging zone for Li-ion (ideal 20-25C). Check cooling/workload/ambient (see battery.md)."
+            - alert: BatteryHot
+              expr: node_power_supply_temp_celsius{power_supply="BAT0"} >= 40
+              for: 10m
               labels:
                 severity: critical
               annotations:
-                summary: "Battery too hot (>=45C)"
-                description: "BAT0 temperature is {{ $value }}C. Reduce load / improve cooling now; consider disconnecting the pack (see battery.md)."
+                summary: "Battery hot ({{ $value }}C, >=40)"
+                description: "BAT0 at/above 40C -- roughly double the aging rate of 25C and approaching swelling risk. Reduce load / improve cooling now (see battery.md)."
             - alert: BatteryHealthLow
               expr: (node_power_supply_charge_full{power_supply="BAT0"} / node_power_supply_charge_full_design{power_supply="BAT0"}) < 0.8
               for: 1h
