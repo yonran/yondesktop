@@ -1072,6 +1072,11 @@ in
   # don't sleep when the lid is shut (requires reboot)
   services.logind.lidSwitchExternalPower = "ignore";
 
+  # blank the console framebuffer after 2 min idle to power down the panel
+  # backlight (the lid-close event already blanks it; this also covers the
+  # lid-open-and-idle case). consoleblank defaults to 0 (disabled) here.
+  boot.kernelParams = [ "consoleblank=120" ];
+
   # docker daemon dropped: containers run under podman (see oci-containers below),
   # the docker daemon had 0 containers/images, and nixpkgs 26.05 deprecates docker_28.
   virtualisation.podman = {
