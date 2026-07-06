@@ -923,6 +923,19 @@ in
       # Pocket ID OIDC identity provider (see modules/pocket-id.nix)
       @id host id.yonathan.org
       handle @id {
+        # Initial-admin bootstrap works whenever no admin exists yet (fresh
+        # deploy, or a re-imaged NAS with an empty /var/lib/pocket-id).
+        # Pocket ID has no flag to gate it, so anyone on the internet could
+        # claim admin in that window. Only allow it from LAN/loopback
+        # (private_ranges) and Tailscale (100.64.0.0/10). /setup is the SPA
+        # page; POST /api/signup/setup is the API that actually creates the
+        # admin (backend/internal/controller/user_signup_controller.go).
+        @setup_public {
+          path /setup* /api/signup/setup*
+          not remote_ip private_ranges 100.64.0.0/10
+        }
+        respond @setup_public "setup is restricted to LAN/Tailscale" 403
+
         # Passkey logins are not brute-forceable, but one-time access codes
         # are short: rate limit their endpoints.
         rate_limit {
