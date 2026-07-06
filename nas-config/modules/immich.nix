@@ -195,6 +195,13 @@ in
       #!${pkgs.python3}/bin/python3
       ${builtins.readFile ../scripts/immich-externalize.py}
     '')
+    # immich-merge-accounts: merge one account into another (assets, albums,
+    # people, memories, tags), folding checksum-duplicate assets into the
+    # destination's copies. Dry-run by default; see --help.
+    (pkgs.writeScriptBin "immich-merge-accounts" ''
+      #!${pkgs.python3}/bin/python3
+      ${builtins.readFile ../scripts/immich-merge-accounts.py}
+    '')
   ];
 
   # Convenience stack target (start/stop all together)

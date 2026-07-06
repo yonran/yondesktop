@@ -252,7 +252,7 @@ def main():
         sys.exit("no DB changes were made")
 
     moves_tsv = "\n".join(f"{aid}\t{new_c}" for aid, _, _, new_c in updates)
-    psql(
+    db_sql = (
         "begin;\n"
         "create temp table moves(id uuid, p text);\n"
         "copy moves from stdin;\n"
@@ -272,6 +272,16 @@ begin
   end if;
 end $$;
 commit;\n""")
+    try:
+        psql(db_sql)
+    except SystemExit:
+        # DB update failed after the files were already moved: put every file
+        # back so disk and DB agree again, then re-raise.
+        print(f"DB update failed; moving {len(moved)} files back")
+        for old_h, new_h in reversed(moved):
+            shutil.move(new_h, old_h)
+        print("all files restored to their original paths; no DB changes were made")
+        raise
     print(f"updated {len(updates)} asset rows; undo log: {undo}")
 
     if unit_was_active and args.stop_server:
