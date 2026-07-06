@@ -99,6 +99,22 @@ builds without activating it, run `sudo nixos-rebuild dry-build` on the NAS inst
 For ad-hoc diagnosis, `ssh yonran@home.yonathan.org` and use `journalctl`, `zpool status`,
 `systemctl`, and sysfs under `/sys/bus/pci|usb/...`.
 
+## Configure tailscale
+
+`services.tailscale` is enabled in configuration.nix (for remote SMB etc.:
+the samba `hosts allow` includes the Tailscale CGNAT range 100.64.0.0/10).
+Authentication is a one-time manual step after the first deploy:
+
+```
+sudo tailscale up
+# visit the printed https://login.tailscale.com/a/... URL
+# (log in as yonathan@gmail.com)
+tailscale status   # verify: shows this node's 100.x address
+```
+
+Then in https://login.tailscale.com/admin/machines, disable key expiry for
+yonnas so it doesn't drop off the tailnet after 180 days.
+
 ## Configure caddy
 
 To configure Let’s Encrypt ACME DNS-01 wildcard certificate,
