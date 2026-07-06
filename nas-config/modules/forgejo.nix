@@ -143,4 +143,49 @@
     home = "/var/lib/gitea-runner";
   };
   users.groups.forgejo-runner = { };
+
+  # Keep the runner's disk use bounded — it lives on the small root SSD
+  # (nvme0n1p2, ~46G). Two things accumulate:
+  #   - per-run `act` checkout dirs under .cache/act/<hash> (the runner never
+  #     cleans these), and
+  #   - saved actions/cache entries under .cache/actcache (immutable; a new one
+  #     is kept whenever the workflow's cache key changes).
+  # The workflow keys (npm on lockfile, astro on image content) already avoid
+  # a new entry per push; this timer evicts the stale tail so it can't fill /.
+  systemd.services.forgejo-runner-cache-prune = {
+    description = "Prune Forgejo runner working dirs and actions cache to bound SSD use";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "forgejo-runner";
+      Group = "forgejo-runner";
+    };
+    script = ''
+      set -u
+      base=/var/lib/gitea-runner/nas/.cache
+      # Remove per-run act working dirs older than 2 days (regenerated per run).
+      if [ -d "$base/act" ]; then
+        ${pkgs.findutils}/bin/find "$base/act" -mindepth 1 -maxdepth 1 -type d \
+          -mtime +2 -exec rm -rf {} + || true
+      fi
+      # Hard cap the actions/cache store at ~800MB; if over, clear it (the next
+      # build just re-populates it). Cheap insurance against the immutable tail.
+      if [ -d "$base/actcache" ]; then
+        sz=$(${pkgs.coreutils}/bin/du -sm "$base/actcache" | ${pkgs.coreutils}/bin/cut -f1)
+        if [ "''${sz:-0}" -gt 800 ]; then rm -rf "$base/actcache"/*; fi
+      fi
+    '';
+  };
+  # Weekly is plenty: the workflow cache keys (npm on lockfile, astro on image
+  # content) already stop actcache from growing per-push, so the only per-run
+  # growth is the small ~5MB checkout dir, and those self-limit to the prune's
+  # 2-day window. This just sweeps the stale tail; it doesn't run per-push.
+  systemd.timers.forgejo-runner-cache-prune = {
+    description = "Weekly prune of Forgejo runner cache/working dirs";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "weekly";
+      Persistent = true;
+      RandomizedDelaySec = "1h";
+    };
+  };
 }
