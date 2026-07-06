@@ -74,6 +74,15 @@ in
       immich-redis = {
         image = "docker.io/valkey/valkey:9@sha256:3eeb09785cd61ec8e3be35f8804c8892080f3ca21934d628abc24ee4ed1698f6";
 
+        # Immich queues its background jobs (metadata, thumbnails, …) in
+        # valkey via BullMQ. Without persistence, any restart of this
+        # container (deploy, reboot, health-kill) silently discards queued
+        # jobs, leaving freshly uploaded assets without thumbnails forever.
+        volumes = [ "immich-redis-data:/data" ];
+        # Snapshot at most 60s of queue changes; also fsync an append-only
+        # log every second so a crash loses at most ~1s of queued jobs.
+        cmd = [ "valkey-server" "--save" "60" "1" "--appendonly" "yes" ];
+
         extraOptions = [
           "--network=podman"
           # healthcheck from your Quadlet:
