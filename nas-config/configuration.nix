@@ -262,6 +262,7 @@ in
       ./modules/monitoring-scripts.nix
       ./modules/zfs-unlock-web.nix
       ./modules/forgejo.nix
+      ./modules/pocket-id.nix
     ];
   # Socket buffer tuning for TCP over high-latency links
   #
@@ -917,6 +918,27 @@ in
         }
 
         reverse_proxy 127.0.0.1:3030
+      }
+
+      # Pocket ID OIDC identity provider (see modules/pocket-id.nix)
+      @id host id.yonathan.org
+      handle @id {
+        # Passkey logins are not brute-forceable, but one-time access codes
+        # are short: rate limit their endpoints.
+        rate_limit {
+          zone auth_zone {
+            key {remote_host}
+            events 5
+            window 60s
+
+            match {
+              method POST
+              path /api/one-time-access-token*
+            }
+          }
+        }
+
+        reverse_proxy 127.0.0.1:1411
       }
 
       # Home Assistant
