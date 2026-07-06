@@ -261,6 +261,7 @@ in
       ./modules/immich.nix
       ./modules/monitoring-scripts.nix
       ./modules/zfs-unlock-web.nix
+      ./modules/forgejo.nix
     ];
   # Socket buffer tuning for TCP over high-latency links
   #
@@ -896,6 +897,26 @@ in
       @grafana host grafana.yonathan.org
       handle @grafana {
         reverse_proxy 127.0.0.1:3000
+      }
+
+      # Forgejo git forge (see modules/forgejo.nix)
+      @git host git.yonathan.org
+      handle @git {
+        # Rate limit login attempts
+        rate_limit {
+          zone auth_zone {
+            key {remote_host}
+            events 5
+            window 60s
+
+            match {
+              method POST
+              path /user/login
+            }
+          }
+        }
+
+        reverse_proxy 127.0.0.1:3030
       }
 
       # Home Assistant

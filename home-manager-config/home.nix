@@ -203,6 +203,9 @@ in {
     # set up credential helper to use gh; equivalent to gh auth setup-git:
     credential."https://github.com".helper = "!${pkgs.gh}/bin/gh auth git-credential";
     credential."https://gist.github.com".helper = "!${pkgs.gh}/bin/gh auth git-credential";
+  
+    # forgejo key generated at https://git.yonathan.org/user/settings/applications/tokens/new
+    credential."https://git.yonathan.org".helper = "osxkeychain";
   };
 
   programs.bash.enable = true;
