@@ -175,17 +175,18 @@
       fi
     '';
   };
-  # Weekly is plenty: the workflow cache keys (npm on lockfile, astro on image
-  # content) already stop actcache from growing per-push, so the only per-run
-  # growth is the small ~5MB checkout dir, and those self-limit to the prune's
-  # 2-day window. This just sweeps the stale tail; it doesn't run per-push.
+  # Run hourly. Not because the checkout dirs need it (they grow slowly and
+  # self-limit to the 2-day window), but because the 800MB size cap is only a
+  # real bound if it's checked often — the runner's cache server has no built-in
+  # eviction, so a weekly check could let the store sit oversized for days on a
+  # nearly-full SSD. The check is a trivial `du`, so hourly costs nothing.
   systemd.timers.forgejo-runner-cache-prune = {
-    description = "Weekly prune of Forgejo runner cache/working dirs";
+    description = "Hourly size-cap check + prune of Forgejo runner cache/working dirs";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "weekly";
+      OnCalendar = "hourly";
       Persistent = true;
-      RandomizedDelaySec = "1h";
+      RandomizedDelaySec = "5m";
     };
   };
 }
