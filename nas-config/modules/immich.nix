@@ -4,6 +4,9 @@
 let
   # Define variables from environment file
   UPLOAD_LOCATION = "/firstpool/family/immich/photos";
+  # Curated photo tree (source of truth), mounted read-only into immich-server
+  # as /external for use as an external library.
+  EXTERNAL_PHOTOS = "/firstpool/family/photos";
   DB_DATA_LOCATION = "/firstpool/family/immich/postgres";
   IMMICH_VERSION = "v2.7.5";
   DB_PASSWORD = "postgres";
@@ -142,6 +145,10 @@ in
           # preserved verbatim
           "${UPLOAD_LOCATION}:/data"
           "/etc/localtime:/etc/localtime:ro"
+          # Curated photo tree as a read-only external library: Immich indexes
+          # it in place but physically cannot modify or delete originals.
+          # Register /external as an external-library import path in the admin UI.
+          "${EXTERNAL_PHOTOS}:/external:ro"
         ];
 
         # Your pod exposed 2283:2283 — mirror that on the server
@@ -171,6 +178,24 @@ in
   # NixOS doesn't need an explicit declaration for it).
   # If you prefer host paths instead, replace "immich-model-cache:/cache" with
   # "/var/lib/immich/model-cache:/cache" and add a tmpfiles rule.
+
+  # Curated photo tree for the external library (owned by yonran, group-writable;
+  # the container only ever sees it read-only via the :ro mount above).
+  systemd.tmpfiles.rules = [
+    "d ${EXTERNAL_PHOTOS} 0775 yonran users -"
+  ];
+
+  # immich-externalize: convert managed (uploaded) assets into external-library
+  # assets by moving the file and updating the asset row in one transaction,
+  # preserving albums/faces/descriptions/tags. Verifies SHA-1 against the DB
+  # checksum before and after each move; snapshots + pg_dumps first.
+  # Usage: sudo immich-externalize --library-id <uuid> plan.tsv [--execute --stop-server]
+  environment.systemPackages = [
+    (pkgs.writeScriptBin "immich-externalize" ''
+      #!${pkgs.python3}/bin/python3
+      ${builtins.readFile ../scripts/immich-externalize.py}
+    '')
+  ];
 
   # Convenience stack target (start/stop all together)
   systemd.targets."immich-stack" = {
