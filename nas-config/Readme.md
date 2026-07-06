@@ -146,8 +146,10 @@ at https://id.yonathan.org for SSO across Immich, Grafana, Forgejo, and
 NTLM challenge-response, which no OIDC/LDAP IdP can back, so Samba stays
 on local smbpasswd accounts.
 
-1. DNS: add a Cloudflare CNAME `id.yonathan.org` → `home.yonathan.org`
-   (proxy status DNS-only, same as the other subdomains).
+1. DNS: Cloudflare CNAME `id.yonathan.org` → `home.yonathan.org`
+   (proxy status DNS-only, same as the other subdomains) — created
+   2026-07-06 via the API using the caddy DNS-01 token
+   (`sudo systemd-creds decrypt --uid=0 /etc/secrets/cloudflare_token.cred -`).
 2. Encryption key (encrypts the OIDC signing keys in the SQLite DB at
    /var/lib/pocket-id) — created 2026-07-06:
 
