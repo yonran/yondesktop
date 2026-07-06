@@ -282,6 +282,38 @@ in {
     };
   };
 
+  # Nightly one-way backup of working files to the NAS (yonnas).
+  # --delete is safe because the NAS dataset has daily ZFS snapshots
+  # (plus nightly replication to backuppool), which provide the history.
+  # Uses /usr/bin/ssh (not pkgs.openssh) for macOS keychain integration.
+  # If the Mac is asleep at 02:30, launchd runs the job on next wake.
+  launchd.agents.nas-backup = lib.mkIf (!isWork) {
+    enable = true;
+    config = {
+      ProgramArguments = [
+        "${pkgs.writeShellScript "nas-backup" ''
+          set -euo pipefail
+          echo "nas-backup starting $(date)"
+          ${pkgs.rsync}/bin/rsync -a --delete \
+            -e "/usr/bin/ssh -o BatchMode=yes" \
+            --exclude node_modules/ \
+            --exclude target/ \
+            --exclude .venv/ \
+            --exclude venv/ \
+            --exclude __pycache__/ \
+            --exclude DerivedData/ \
+            "$HOME/repos" "$HOME/Documents" \
+            yonran@home.yonathan.org:/firstpool/family/yonran/macbook/
+          echo "nas-backup completed $(date)"
+        ''}"
+      ];
+      StartCalendarInterval = [ { Hour = 2; Minute = 30; } ];
+      ProcessType = "Background";
+      StandardOutPath = "${config.xdg.dataHome}/nas-backup/stdout.log";
+      StandardErrorPath = "${config.xdg.dataHome}/nas-backup/stderr.log";
+    };
+  };
+
 
   # MacOS Preferences
   # defaults read -globalDomain InitialKeyRepeat
