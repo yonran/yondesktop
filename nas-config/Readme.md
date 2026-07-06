@@ -138,6 +138,54 @@ Create OAuth 2.0 Client ID at https://console.cloud.google.com/apis/credentials?
 * `sudo systemd-creds encrypt --tpm2-device=auto - /etc/secrets/google_client_secret`
 * `uuidgen | tr -d '\n' | sudo systemd-creds encrypt --name auth_sign_key --tpm2-device=auto - /etc/secrets/caddy_auth_sign_key.cred`
 
+## Configure Pocket ID (OIDC identity provider)
+
+Pocket ID (modules/pocket-id.nix) is a self-hosted passkey-only OIDC IdP
+at https://id.yonathan.org for SSO across Immich, Grafana, Forgejo, and
+(eventually) the caddy-security portal. SMB is *not* covered: SMB does
+NTLM challenge-response, which no OIDC/LDAP IdP can back, so Samba stays
+on local smbpasswd accounts.
+
+1. DNS: add a Cloudflare CNAME `id.yonathan.org` → `home.yonathan.org`
+   (proxy status DNS-only, same as the other subdomains).
+2. Encryption key (encrypts the OIDC signing keys in the SQLite DB at
+   /var/lib/pocket-id) — created 2026-07-06:
+
+   ```
+   head -c 32 /dev/urandom | base64 | sudo systemd-creds encrypt \
+     --name=ENCRYPTION_KEY_FILE - /etc/secrets/pocket_id_encryption_key.cred
+   ```
+
+   The `--name` must be `ENCRYPTION_KEY_FILE` (the credential name the
+   NixOS module's unit script decrypts). If the key is ever lost, Pocket ID
+   cannot read its stored OIDC signing keys; back up /var/lib/pocket-id and
+   this cred file together.
+3. Deploy (`nas-config/deploy-over-ssh.sh`), then visit
+   https://id.yonathan.org/setup to create the initial admin account and
+   register its passkey. The page only works while no admin exists.
+4. Create each family member in the admin UI and send them a one-time
+   access link; opening it logs them in once so they can enroll a passkey
+   (Face ID/Touch ID; syncs across their devices via iCloud Keychain).
+   The same link flow is the recovery path for lost passkeys.
+5. Per app, create an OIDC client in Pocket ID's admin UI, then point the
+   app at issuer `https://id.yonathan.org` with that client id/secret:
+   - Immich: Admin → Settings → OAuth. For the mobile app, also set
+     Mobile Redirect URI Override to
+     `https://photos.yonathan.org/api/oauth/mobile-redirect` and add that
+     URL as a callback URL on the Pocket ID client. Disable auto-register
+     or pre-create users so OAuth links by email.
+   - Grafana: `services.grafana.settings."auth.generic_oauth"` in
+     home-monitoring.nix.
+   - Forgejo: Site Administration → Identity & Access → Authentication
+     Sources → add OpenID Connect, auto-discovery URL
+     `https://id.yonathan.org/.well-known/openid-configuration`.
+   - caddy-security: replace the `google` identity provider with a
+     `generic` OAuth provider pointing at Pocket ID (then the Google
+     OAuth client can be retired).
+
+Warning: passkeys are bound to the hostname (WebAuthn RP ID). Renaming
+id.yonathan.org invalidates every enrolled passkey.
+
 ## Configure sb-exporter
 
 To configure the monitoring of the cable sb-exporter modem monitor,
