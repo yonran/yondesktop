@@ -357,6 +357,8 @@ in
     allowedUDPPorts = [ 51820 443 ];
     # enable iperf
     allowedTCPPorts = [ 5201 80 443 ];
+    # Tailscale: strict rp_filter drops its return packets
+    checkReversePath = "loose";
   };
   networking.firewall.interfaces.wg0 = {
     allowedTCPPorts = [
@@ -499,10 +501,15 @@ in
         #"use sendfile" = "yes";
         #"max protocol" = "smb2";
         # note: localhost is the ipv6 localhost ::1
-        "hosts allow" = "192.168.1. 127.0.0.1 localhost 192.168.29.";
+        # 100.64.0.0/255.192.0.0 is the Tailscale CGNAT range (100.64.0.0/10)
+        "hosts allow" = "192.168.1. 127.0.0.1 localhost 192.168.29. 100.64.0.0/255.192.0.0";
         "hosts deny" = "0.0.0.0/0";
         "guest account" = "nobody";
         "map to guest" = "bad user";
+        # macOS interop: store Finder metadata/resource forks in xattrs
+        # (via streams_xattr) instead of ._* AppleDouble sidecar files
+        "fruit:metadata" = "stream";
+        "fruit:resource" = "stream";
       };
       "public" = {
         "path" = "/firstpool/family/media";
@@ -514,7 +521,7 @@ in
         "force user" = "yonran";
         "force group" = "users";
         # Recycle bin for safe deletes
-        "vfs objects" = "recycle";
+        "vfs objects" = "fruit streams_xattr recycle";
         "recycle:repository" = ".recycle";
         "recycle:keeptree" = "yes";
         "recycle:versions" = "yes";
@@ -535,7 +542,7 @@ in
         "force group" = "users";
         "valid users" = "yonran";
         # Recycle bin for safe deletes
-        "vfs objects" = "recycle";
+        "vfs objects" = "fruit streams_xattr recycle";
         "recycle:repository" = ".recycle";
         "recycle:keeptree" = "yes";
         "recycle:versions" = "yes";
@@ -554,7 +561,7 @@ in
         "force group" = "users";
         "valid users" = "nosiri";
         # Recycle bin for safe deletes
-        "vfs objects" = "recycle";
+        "vfs objects" = "fruit streams_xattr recycle";
         "recycle:repository" = ".recycle";
         "recycle:keeptree" = "yes";
         "recycle:versions" = "yes";
@@ -574,7 +581,7 @@ in
         "force group" = "users";
         "valid users" = "yonran nosiri";
         # Recycle bin for safe deletes
-        "vfs objects" = "recycle";
+        "vfs objects" = "fruit streams_xattr recycle";
         "recycle:repository" = ".recycle";
         "recycle:keeptree" = "yes";
         "recycle:versions" = "yes";
@@ -588,6 +595,13 @@ in
   services.samba-wsdd = {
     enable = true;
     openFirewall = true;
+  };
+
+  # Tailscale for remote access to SMB (and everything else) without port
+  # forwarding. One-time login after deploy: sudo tailscale up
+  services.tailscale = {
+    enable = true;
+    openFirewall = true; # UDP 41641 for direct (non-DERP) connections
   };
 
   # Jellyfin media server
