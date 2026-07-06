@@ -37,6 +37,9 @@
               nixpkgs.overlays = [ rust-overlay.overlays.default ];
               # environment.systemPackages = [ pkgs.rust-bin.stable.latest.default ];
             })
+            # Pin the user registry so `nix-shell` resolves flake:nixpkgs to
+            # this flake's nixpkgs rather than nix-darwin's system registry pin.
+            { nix.registry.nixpkgs.flake = nixpkgs; }
           ];
 
           # Pass isWork through to home.nix so work-only laptops can opt
