@@ -294,6 +294,9 @@ in {
         "${pkgs.writeShellScript "nas-backup" ''
           set -euo pipefail
           echo "nas-backup starting $(date)"
+          # Working files + AI-CLI configs and session history (.claude/.codex/.gemini).
+          # Credentials are excluded so auth tokens don't leave this machine;
+          # caches and transient state are excluded as rebuildable.
           ${pkgs.rsync}/bin/rsync -a --delete \
             -e "/usr/bin/ssh -o BatchMode=yes" \
             --exclude node_modules/ \
@@ -302,7 +305,25 @@ in {
             --exclude venv/ \
             --exclude __pycache__/ \
             --exclude DerivedData/ \
+            --exclude '.claude/.credentials.json' \
+            --exclude '.claude/cache/' \
+            --exclude '.claude/paste-cache/' \
+            --exclude '.claude/session-env/' \
+            --exclude '.claude/shell-snapshots/' \
+            --exclude '.claude/telemetry/' \
+            --exclude '.claude/debug/' \
+            --exclude '.claude/daemon/' \
+            --exclude '.claude/.cc-writes/' \
+            --exclude '.claude/chrome/' \
+            --exclude '.codex/auth.json' \
+            --exclude '.codex/cache/' \
+            --exclude '.codex/tmp/' \
+            --exclude '.codex/log/' \
+            --exclude '*.sqlite-shm' \
+            --exclude '*.sqlite-wal' \
+            --exclude '.gemini/oauth_creds.json' \
             "$HOME/repos" "$HOME/Documents" \
+            "$HOME/.claude" "$HOME/.codex" "$HOME/.gemini" \
             yonran@home.yonathan.org:/firstpool/family/yonran/macbook/
           echo "nas-backup completed $(date)"
         ''}"
