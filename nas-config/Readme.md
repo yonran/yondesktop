@@ -222,6 +222,32 @@ chmod o+x /firstpool/family
 sudo chgrp -R owntracks-recorder /firstpool/family/owntracks
 ```
 
+## Configure Immich external library (gphotos-sync)
+
+Immich (modules/immich.nix) mounts `/firstpool/family/photos` read-only at
+`/external`. The **gphotos-sync** tool (google-photos-tools repo, `sync/`)
+writes Google Photos originals + XMP sidecars into `photos/google` over the
+`photos` SMB share (configuration.nix) and triggers Immich scans via API.
+
+One-time manual setup (done 2026-07-07):
+
+1. Created the external library via the API (Immich has no NixOS-declarative
+   config for libraries; equivalently: Administration → External Libraries):
+
+   ```
+   curl -X POST -H "x-api-key: $ADMIN_KEY" -H 'content-type: application/json' \
+     -d '{"ownerId":"<admin user id from GET /api/users/me>",
+          "name":"Google Photos","importPaths":["/external/google"]}' \
+     http://yonnas:2283/api/libraries
+   # -> id 99c590c3-7cce-439a-92a8-8eda92a53dc4 (in gphotos-sync.config.json)
+   ```
+
+2. Created a scoped API key for the sync (User Settings → API Keys, as the
+   admin user — `/libraries` routes require an admin): permissions
+   `asset.upload`, `library.read`, `library.update`, `album.read`,
+   `album.create`, `albumAsset.create`. See the permission table in
+   google-photos-tools `sync/README.md`.
+
 ## Monitoring and Email Alerts
 
 This repo configures a local monitoring stack and email alerting for disk space, SMART, and ZFS events.

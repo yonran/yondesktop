@@ -553,6 +553,29 @@ in
         "recycle:exclude" = "*.tmp,*.temp,~$*";
         "recycle:exclude_dir" = ".recycle";
       };
+      # Curated photo tree; Immich indexes it read-only as /external (see modules/immich.nix).
+      # gphotos-sync (google-photos-tools) writes Google Photos originals + XMP sidecars
+      # into photos/google over this share.
+      "photos" = {
+        "path" = "/firstpool/family/photos";
+        "browseable" = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "create mask" = "0755";
+        "directory mask" = "0755";
+        "force user" = "yonran";
+        "force group" = "users";
+        "valid users" = "yonran";
+        # Recycle bin for safe deletes
+        "vfs objects" = "fruit streams_xattr recycle";
+        "recycle:repository" = ".recycle";
+        "recycle:keeptree" = "yes";
+        "recycle:versions" = "yes";
+        "recycle:touch" = "yes";
+        "recycle:touch_mtime" = "no";
+        "recycle:exclude" = "*.tmp,*.temp,~$*";
+        "recycle:exclude_dir" = ".recycle";
+      };
       "nosiri" = {
         "path" = "/firstpool/family/nosiri";
         "browseable" = "yes";
