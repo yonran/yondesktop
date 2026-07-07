@@ -930,9 +930,15 @@ in
         # (private_ranges) and Tailscale (100.64.0.0/10). /setup is the SPA
         # page; POST /api/signup/setup is the API that actually creates the
         # admin (backend/internal/controller/user_signup_controller.go).
+        # IPv6: LAN ULA (fd15:7ec6:256a::/48) and Tailscale (fd7a::/…) are
+        # inside fc00::/7, which private_ranges already covers. The extra
+        # prefix below is the Comcast-delegated global /64, which LAN
+        # clients use as source when talking to a global IPv6 address
+        # (e.g. if an AAAA record is added later). It is dynamic in
+        # principle; if Comcast renumbers, update it (only /setup breaks).
         @setup_public {
           path /setup* /api/signup/setup*
-          not remote_ip private_ranges 100.64.0.0/10
+          not remote_ip private_ranges 100.64.0.0/10 2601:602:8b00:13b0::/64
         }
         respond @setup_public "setup is restricted to LAN/Tailscale" 403
 
