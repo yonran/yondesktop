@@ -931,17 +931,15 @@ in
         # page; POST /api/signup/setup is the API that actually creates the
         # admin (backend/internal/controller/user_signup_controller.go).
         # IPv6: LAN ULA (fd15:7ec6:256a::/48) and Tailscale (fd7a::/…) are
-        # inside fc00::/7, which private_ranges already covers. Also allow
-        # the Comcast-delegated global /64, which LAN clients use as source
-        # when talking to a global IPv6 address (e.g. if an AAAA record is
-        # added later). It is dynamic, so caddy's preStart derives it from
-        # the RA routes at each service start (LAN_IPV6_PREFIX; falls back
-        # to ::1/128 when there is no global IPv6). Note a caddy *reload*
-        # keeps the env from the last start; restart caddy after a Comcast
-        # renumbering (only /setup is affected either way).
+        # inside fc00::/7, which private_ranges already covers. Global
+        # (2601:…) sources are deliberately NOT allowed: the delegated
+        # prefix can be renumbered to another ISP customer, so it is not a
+        # trustworthy identity. If a client ever reaches this vhost over
+        # global IPv6 (would need an AAAA record first), /setup is denied;
+        # use LAN IPv4, ULA, or Tailscale instead.
         @setup_public {
           path /setup* /api/signup/setup*
-          not remote_ip private_ranges 100.64.0.0/10 {$LAN_IPV6_PREFIX}
+          not remote_ip private_ranges 100.64.0.0/10
         }
         respond @setup_public "setup is restricted to LAN/Tailscale" 403
 
@@ -1047,17 +1045,6 @@ in
     ];
     # Use a dedicated runtime dir for caddy and place the envfile under $RUNTIME_DIRECTORY/caddy
     serviceConfig.RuntimeDirectory = "caddy";
-    # Derive the RA-advertised global IPv6 /64 (Comcast-delegated, so it
-    # can change; don't hard-code it) for the Pocket ID /setup allowlist.
-    # systemd reads EnvironmentFile when spawning each Exec* process, so
-    # ExecStart picks up what preStart wrote; "-" tolerates the file not
-    # existing (e.g. for preStart itself).
-    preStart = ''
-      prefix=$(${pkgs.iproute2}/bin/ip -6 route show proto ra 2>/dev/null \
-        | ${pkgs.gnugrep}/bin/grep -oE '^[23][0-9a-f:]+/64' | ${pkgs.coreutils}/bin/head -n1)
-      echo "LAN_IPV6_PREFIX=''${prefix:-::1/128}" > "$RUNTIME_DIRECTORY/lan6.env"
-    '';
-    serviceConfig.EnvironmentFile = [ "-/run/caddy/lan6.env" ];
     # Export the token directly from the decrypted credential into the environment
     # Expose credential file paths via %d, to avoid using the '@' expansion
     serviceConfig.Environment = [
@@ -1066,31 +1053,6 @@ in
       "GOOGLE_CLIENT_SECRET_FILE=%d/google_client_secret"
       "AUTH_SIGN_KEY_FILE=%d/auth_sign_key"
     ];
-  };
-
-  # If Comcast renumbers the delegated IPv6 prefix, the LAN_IPV6_PREFIX that
-  # caddy captured at start goes stale — and the old /64 may be delegated to
-  # another customer, whose devices would then pass the Pocket ID /setup
-  # allowlist. Check hourly and restart caddy only when the prefix changed.
-  systemd.services.caddy-lan6-refresh = {
-    description = "Restart caddy when the RA-advertised IPv6 /64 changes";
-    serviceConfig.Type = "oneshot";
-    script = ''
-      prefix=$(${pkgs.iproute2}/bin/ip -6 route show proto ra 2>/dev/null \
-        | ${pkgs.gnugrep}/bin/grep -oE '^[23][0-9a-f:]+/64' | ${pkgs.coreutils}/bin/head -n1)
-      current="LAN_IPV6_PREFIX=''${prefix:-::1/128}"
-      if [ "$current" != "$(${pkgs.coreutils}/bin/cat /run/caddy/lan6.env 2>/dev/null)" ]; then
-        echo "IPv6 prefix changed to ''${prefix:-none}; restarting caddy"
-        ${pkgs.systemd}/bin/systemctl restart caddy.service
-      fi
-    '';
-  };
-  systemd.timers.caddy-lan6-refresh = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "15m";
-      OnUnitActiveSec = "1h";
-    };
   };
 
   # Enable TPM2 userspace stack so systemd can decrypt TPM2-sealed credentials
