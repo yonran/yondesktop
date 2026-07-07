@@ -171,11 +171,24 @@ on local smbpasswd accounts.
    The same link flow is the recovery path for lost passkeys.
 5. Per app, create an OIDC client in Pocket ID's admin UI, then point the
    app at issuer `https://id.yonathan.org` with that client id/secret:
-   - Immich: Admin → Settings → OAuth. For the mobile app, also set
-     Mobile Redirect URI Override to
-     `https://photos.yonathan.org/api/oauth/mobile-redirect` and add that
-     URL as a callback URL on the Pocket ID client. Disable auto-register
-     or pre-create users so OAuth links by email.
+   - Immich: Admin → Settings → Authentication → OAuth. DONE 2026-07-07
+     (Pocket ID client "Immich"). Config: issuer_url
+     `https://id.yonathan.org/.well-known/openid-configuration`, the client
+     id/secret, scope `openid email profile`, PKCE on (enabled on the
+     Pocket ID client too). Callback URLs on the Pocket ID client:
+     `https://photos.yonathan.org/auth/login`,
+     `https://photos.yonathan.org/user-settings`, and the mobile deep link
+     `app.immich:///oauth-callback`. Pocket ID accepts the custom scheme,
+     so the Mobile Redirect URI Override is NOT needed (that override is
+     only for providers like Google that reject custom schemes). Auto
+     register is left on — the IdP is the gate, and OAuth links to the
+     existing admin by matching email (yonathan@gmail.com). The client
+     secret lives only in Immich's DB (system-config) + Pocket ID, not in
+     Nix. Gotchas: (a) the secret is shown once at creation — if you
+     mistype it, "Invalid client secret" appears in immich-server logs;
+     use "Create new client secret" on the Pocket ID client to regenerate.
+     (b) new Pocket ID clients default to restricted with no groups; click
+     Unrestrict.
    - Grafana: `services.grafana.settings."auth.generic_oauth"` in
      home-monitoring.nix — DONE 2026-07-07 (client "Grafana", secret at
      /etc/secrets/grafana_oauth_client_secret.cred). Gotcha: if Pocket ID
