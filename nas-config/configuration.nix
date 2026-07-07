@@ -1068,6 +1068,31 @@ in
     ];
   };
 
+  # If Comcast renumbers the delegated IPv6 prefix, the LAN_IPV6_PREFIX that
+  # caddy captured at start goes stale — and the old /64 may be delegated to
+  # another customer, whose devices would then pass the Pocket ID /setup
+  # allowlist. Check hourly and restart caddy only when the prefix changed.
+  systemd.services.caddy-lan6-refresh = {
+    description = "Restart caddy when the RA-advertised IPv6 /64 changes";
+    serviceConfig.Type = "oneshot";
+    script = ''
+      prefix=$(${pkgs.iproute2}/bin/ip -6 route show proto ra 2>/dev/null \
+        | ${pkgs.gnugrep}/bin/grep -oE '^[23][0-9a-f:]+/64' | ${pkgs.coreutils}/bin/head -n1)
+      current="LAN_IPV6_PREFIX=''${prefix:-::1/128}"
+      if [ "$current" != "$(${pkgs.coreutils}/bin/cat /run/caddy/lan6.env 2>/dev/null)" ]; then
+        echo "IPv6 prefix changed to ''${prefix:-none}; restarting caddy"
+        ${pkgs.systemd}/bin/systemctl restart caddy.service
+      fi
+    '';
+  };
+  systemd.timers.caddy-lan6-refresh = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "15m";
+      OnUnitActiveSec = "1h";
+    };
+  };
+
   # Enable TPM2 userspace stack so systemd can decrypt TPM2-sealed credentials
   # (doesn't work yet I don't think since sudo systemd-creds encrypt --tpm2-device --name=hi - -
   # still gives warning “Credential secret file '/var/lib/systemd/credential.secret' is not located on encrypted media, using anyway.”)
