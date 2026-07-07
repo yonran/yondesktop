@@ -195,9 +195,27 @@ on local smbpasswd accounts.
      shows "You're not allowed to access this service", the client is in
      restricted mode with no Allowed User Groups; click Unrestrict on the
      client page.
-   - Forgejo: Site Administration → Identity & Access → Authentication
-     Sources → add OpenID Connect, auto-discovery URL
-     `https://id.yonathan.org/.well-known/openid-configuration`.
+   - Forgejo: DONE 2026-07-07. Two parts:
+     (a) Account-linking behaviour is declarative in modules/forgejo.nix
+         ([oauth2_client] ACCOUNT_LINKING=auto, USERNAME=preferred_username).
+     (b) The auth *source* is stored in Forgejo's DB (not Nix), added at
+         Site Administration → Identity & access → Authentication sources →
+         Add → OAuth2 → provider "OpenID Connect", name "pocket-id" (this
+         name is the callback slug: /user/oauth2/pocket-id/callback), the
+         client id/secret, and auto-discovery URL
+         `https://id.yonathan.org/.well-known/openid-configuration`.
+     Gotcha: Forgejo requests ONLY `openid` by default, so its login lands
+     on an empty "register/link" page. You MUST set the source's scopes to
+     `openid email profile` (Additional scopes field, or CLI
+     `forgejo admin auth update-oauth --id <n> --scopes openid --scopes
+     email --scopes profile`) and restart Forgejo so it re-reads them.
+     First OIDC login for an existing account (e.g. yonran) requires a
+     one-time password confirmation on the "Link to an existing account"
+     tab (Forgejo confirms ownership before attaching the external
+     identity); after that, SSO is seamless. The source persists in the
+     ZFS-backed DB across redeploys, but the scopes fix is NOT in Nix
+     (auth sources can't be) — recreate it with the scopes above if the DB
+     is ever lost.
    - caddy-security: replace the `google` identity provider with a
      `generic` OAuth provider pointing at Pocket ID (then the Google
      OAuth client can be retired).
