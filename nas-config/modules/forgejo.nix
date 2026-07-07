@@ -60,6 +60,19 @@
       service = {
         DISABLE_REGISTRATION = true; # accounts are created by the admin only
       };
+      # SSO via the self-hosted Pocket ID OIDC IdP. The auth *source* itself
+      # (client id/secret, discovery URL) is stored in Forgejo's DB and added
+      # in the admin UI (Site Administration -> Identity & access ->
+      # Authentication sources, name "pocket-id" so the callback is
+      # /user/oauth2/pocket-id/callback). Only the login *behaviour* is
+      # declarative here: link a first OIDC login to the existing local
+      # account with the same (verified) email instead of prompting for a
+      # password. New-account creation stays admin-only (registration
+      # disabled above; auto-registration left at its default of off).
+      oauth2_client = {
+        ACCOUNT_LINKING = "auto";
+        USERNAME = "preferred_username";
+      };
       actions = {
         ENABLED = true;
         # where uses: actions/checkout@v4 etc. resolve from
