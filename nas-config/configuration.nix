@@ -931,14 +931,17 @@ in
         # page; POST /api/signup/setup is the API that actually creates the
         # admin (backend/internal/controller/user_signup_controller.go).
         # IPv6: LAN ULA (fd15:7ec6:256a::/48) and Tailscale (fd7a::/…) are
-        # inside fc00::/7, which private_ranges already covers. The extra
-        # prefix below is the Comcast-delegated global /64, which LAN
-        # clients use as source when talking to a global IPv6 address
-        # (e.g. if an AAAA record is added later). It is dynamic in
-        # principle; if Comcast renumbers, update it (only /setup breaks).
+        # inside fc00::/7, which private_ranges already covers. Also allow
+        # the Comcast-delegated global /64, which LAN clients use as source
+        # when talking to a global IPv6 address (e.g. if an AAAA record is
+        # added later). It is dynamic, so caddy's preStart derives it from
+        # the RA routes at each service start (LAN_IPV6_PREFIX; falls back
+        # to ::1/128 when there is no global IPv6). Note a caddy *reload*
+        # keeps the env from the last start; restart caddy after a Comcast
+        # renumbering (only /setup is affected either way).
         @setup_public {
           path /setup* /api/signup/setup*
-          not remote_ip private_ranges 100.64.0.0/10 2601:602:8b00:13b0::/64
+          not remote_ip private_ranges 100.64.0.0/10 {$LAN_IPV6_PREFIX}
         }
         respond @setup_public "setup is restricted to LAN/Tailscale" 403
 
@@ -1044,6 +1047,17 @@ in
     ];
     # Use a dedicated runtime dir for caddy and place the envfile under $RUNTIME_DIRECTORY/caddy
     serviceConfig.RuntimeDirectory = "caddy";
+    # Derive the RA-advertised global IPv6 /64 (Comcast-delegated, so it
+    # can change; don't hard-code it) for the Pocket ID /setup allowlist.
+    # systemd reads EnvironmentFile when spawning each Exec* process, so
+    # ExecStart picks up what preStart wrote; "-" tolerates the file not
+    # existing (e.g. for preStart itself).
+    preStart = ''
+      prefix=$(${pkgs.iproute2}/bin/ip -6 route show proto ra 2>/dev/null \
+        | ${pkgs.gnugrep}/bin/grep -oE '^[23][0-9a-f:]+/64' | ${pkgs.coreutils}/bin/head -n1)
+      echo "LAN_IPV6_PREFIX=''${prefix:-::1/128}" > "$RUNTIME_DIRECTORY/lan6.env"
+    '';
+    serviceConfig.EnvironmentFile = [ "-/run/caddy/lan6.env" ];
     # Export the token directly from the decrypted credential into the environment
     # Expose credential file paths via %d, to avoid using the '@' expansion
     serviceConfig.Environment = [
