@@ -303,12 +303,36 @@ in
         server = {
           http_addr = "0.0.0.0";
           http_port = 3000;
+          # Public URL behind Caddy; required so the OAuth redirect_uri is
+          # https://grafana.yonathan.org/login/generic_oauth (the callback
+          # registered on the Pocket ID client) instead of localhost:3000.
+          root_url = "https://grafana.yonathan.org";
         };
         # nixpkgs 26.05 removed the built-in default for secret_key. Set the previous
         # default explicitly so any secrets already encrypted in Grafana's DB keep
         # decrypting unchanged (this is the same key Grafana was already using).
         # To rotate later, generate a new key and supply it via a file-provider.
         security.secret_key = "SW2YcwTIb9zpOOhoPsMm";
+        # SSO via the self-hosted Pocket ID OIDC IdP (see modules/pocket-id.nix,
+        # client "Grafana" in its admin UI). Who may log in at all is decided
+        # by the IdP; anyone it admits gets a Grafana account on first login
+        # (allow_sign_up), with the org role derived from email below.
+        "auth.generic_oauth" = {
+          enabled = true;
+          name = "Pocket ID";
+          client_id = "297bb511-5440-4ccb-84b3-76c38db4ad05";
+          # Secret was created in the Pocket ID admin UI and stored with
+          # systemd-creds; LoadCredentialEncrypted below decrypts it to
+          # /run/credentials/grafana.service/ for Grafana's file provider.
+          client_secret = "$__file{/run/credentials/grafana.service/grafana_oauth_client_secret}";
+          scopes = "openid email profile groups";
+          auth_url = "https://id.yonathan.org/authorize";
+          token_url = "https://id.yonathan.org/api/oidc/token";
+          api_url = "https://id.yonathan.org/api/oidc/userinfo";
+          use_pkce = true;
+          allow_sign_up = true;
+          role_attribute_path = "email=='yonathan@gmail.com' && 'Admin' || 'Viewer'";
+        };
       };
       # Declaratively provision dashboards from ./grafana-dashboards/*.json. These show
       # up read-only in a "nas" folder. The dashboards bind to whatever Prometheus
@@ -325,6 +349,11 @@ in
         ];
       };
     };
+
+    # Decrypt the Pocket ID OAuth client secret for Grafana's $__file provider
+    systemd.services.grafana.serviceConfig.LoadCredentialEncrypted = [
+      "grafana_oauth_client_secret:/etc/secrets/grafana_oauth_client_secret.cred"
+    ];
 
     # Alertmanager for e-mailing Prometheus alerts
     services.prometheus.alertmanager = {
