@@ -177,7 +177,11 @@ on local smbpasswd accounts.
      URL as a callback URL on the Pocket ID client. Disable auto-register
      or pre-create users so OAuth links by email.
    - Grafana: `services.grafana.settings."auth.generic_oauth"` in
-     home-monitoring.nix.
+     home-monitoring.nix — DONE 2026-07-07 (client "Grafana", secret at
+     /etc/secrets/grafana_oauth_client_secret.cred). Gotcha: if Pocket ID
+     shows "You're not allowed to access this service", the client is in
+     restricted mode with no Allowed User Groups; click Unrestrict on the
+     client page.
    - Forgejo: Site Administration → Identity & Access → Authentication
      Sources → add OpenID Connect, auto-discovery URL
      `https://id.yonathan.org/.well-known/openid-configuration`.
