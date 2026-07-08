@@ -220,6 +220,49 @@ on local smbpasswd accounts.
      `generic` OAuth provider pointing at Pocket ID (then the Google
      OAuth client can be retired).
 
+### client id vs client secret
+
+Each Pocket ID client has a **client id** (a random UUID Pocket ID assigns,
+stored in its DB) and a **client secret**. The id is *not* secret — it rides
+in the browser redirect — so it is hard-coded in Nix / entered in the app's
+config, which documents the app→client binding in version control. The
+secret *is* secret and lives only in a systemd-creds file (Grafana,
+caddy-security) or the app's own DB (Immich, Forgejo) — never in Nix/git.
+Pocket ID 2.x has no declarative client config: both values are assigned by
+the IdP, so if its DB is lost and clients are recreated, every app's id
+*and* secret must be re-synced (a visible diff for the id; a rotation for
+the secret).
+
+### Rotating a client secret
+
+Pocket ID reveals a client secret **once**, at (re)generation — reload the
+page and it is masked forever after, so you must capture it immediately.
+To rotate: open the client at
+`https://id.yonathan.org/settings/admin/oidc-clients/<client-id>`, click the
+↻ icon next to "Client secret" → **Generate**, then place the new value.
+Until both sides match, *new* SSO logins to that app fail (existing sessions
+keep working), so place-and-restart promptly.
+
+- Grafana (secret in a NAS cred file) — copy the new value, then, without it
+  ever touching disk locally, pipe it straight into the encrypted cred and
+  restart (done this way 2026-07-08):
+
+  ```
+  pbpaste | ssh home.yonathan.org -- \
+    "sudo systemd-creds encrypt --name=grafana_oauth_client_secret - \
+     /etc/secrets/grafana_oauth_client_secret.cred && sudo systemctl restart grafana"
+  ```
+
+  The `--name` must equal the LoadCredentialEncrypted id
+  (`grafana_oauth_client_secret`, see home-monitoring.nix). caddy-security's
+  secret rotates the same way once wired: `--name=pocketid_client_secret`,
+  file `/etc/secrets/pocketid_client_secret`, restart `caddy`.
+- Immich (secret in Immich's DB): paste into Admin → Settings →
+  Authentication → OAuth → Client Secret, Save.
+- Forgejo (secret in Forgejo's DB): paste into Site Administration →
+  Identity & access → Authentication sources → `pocket-id` → Client Secret,
+  Save (restart Forgejo to be safe).
+
 Warning: passkeys are bound to the hostname (WebAuthn RP ID). Renaming
 id.yonathan.org invalidates every enrolled passkey.
 
