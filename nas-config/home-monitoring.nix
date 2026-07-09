@@ -320,10 +320,16 @@ in
         "auth.generic_oauth" = {
           enabled = true;
           name = "Pocket ID";
-          client_id = "297bb511-5440-4ccb-84b3-76c38db4ad05";
-          # Secret was created in the Pocket ID admin UI and stored with
-          # systemd-creds; LoadCredentialEncrypted below decrypts it to
-          # /run/credentials/grafana.service/ for Grafana's file provider.
+          # Both the client id and secret are issued by Pocket ID at client
+          # creation (random UUID + secret, stored in its DB), so neither is a
+          # reproducible/declarative value — hard-coding the id in Nix would
+          # only be correct against *this* machine's Pocket ID DB. So both are
+          # kept out of Nix and referenced by path via $__file. They differ in
+          # confidentiality, and are loaded accordingly below: the secret is
+          # encrypted (LoadCredentialEncrypted), the id is a plaintext
+          # credential (LoadCredential) — it is not secret, so encrypting it
+          # would only make it an opaque blob you can't cat to check the id.
+          client_id = "$__file{/run/credentials/grafana.service/grafana_oauth_client_id}";
           client_secret = "$__file{/run/credentials/grafana.service/grafana_oauth_client_secret}";
           scopes = "openid email profile groups";
           auth_url = "https://id.yonathan.org/authorize";
@@ -350,7 +356,14 @@ in
       };
     };
 
-    # Decrypt the Pocket ID OAuth client secret for Grafana's $__file provider
+    # Pass the Pocket ID OAuth client id + secret into Grafana's $__file
+    # provider (both created by hand after the Pocket ID client exists — see
+    # Readme "Configure Pocket ID"). The id is not secret → plaintext
+    # LoadCredential; the secret → LoadCredentialEncrypted (systemd-creds).
+    # Both land in /run/credentials/grafana.service/ regardless.
+    systemd.services.grafana.serviceConfig.LoadCredential = [
+      "grafana_oauth_client_id:/etc/secrets/grafana_oauth_client_id"
+    ];
     systemd.services.grafana.serviceConfig.LoadCredentialEncrypted = [
       "grafana_oauth_client_secret:/etc/secrets/grafana_oauth_client_secret.cred"
     ];

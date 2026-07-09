@@ -190,11 +190,25 @@ on local smbpasswd accounts.
      (b) new Pocket ID clients default to restricted with no groups; click
      Unrestrict.
    - Grafana: `services.grafana.settings."auth.generic_oauth"` in
-     home-monitoring.nix — DONE 2026-07-07 (client "Grafana", secret at
-     /etc/secrets/grafana_oauth_client_secret.cred). Gotcha: if Pocket ID
-     shows "You're not allowed to access this service", the client is in
-     restricted mode with no Allowed User Groups; click Unrestrict on the
-     client page.
+     home-monitoring.nix — DONE 2026-07-07 (client "Grafana"). Both the
+     client id and secret are manual creds referenced by `$__file{}` (see
+     "client id vs client secret" above); create them after the Pocket ID
+     client exists. The id is not secret → plaintext file; the secret →
+     encrypted:
+
+     ```
+     # id (public): plaintext credential
+     printf %s '<client-id-uuid>' | ssh home.yonathan.org -- \
+       "sudo tee /etc/secrets/grafana_oauth_client_id >/dev/null"
+     # secret (never on local disk): copy from Pocket ID, then
+     pbpaste | ssh home.yonathan.org -- \
+       "sudo systemd-creds encrypt --name=grafana_oauth_client_secret - \
+        /etc/secrets/grafana_oauth_client_secret.cred"
+     ```
+
+     Gotcha: if Pocket ID shows "You're not allowed to access this service",
+     the client is in restricted mode with no Allowed User Groups; click
+     Unrestrict on the client page.
    - Forgejo: DONE 2026-07-07. Two parts:
      (a) Account-linking behaviour is declarative in modules/forgejo.nix
          ([oauth2_client] ACCOUNT_LINKING=auto, USERNAME=preferred_username).
@@ -222,16 +236,21 @@ on local smbpasswd accounts.
 
 ### client id vs client secret
 
-Each Pocket ID client has a **client id** (a random UUID Pocket ID assigns,
-stored in its DB) and a **client secret**. The id is *not* secret — it rides
-in the browser redirect — so it is hard-coded in Nix / entered in the app's
-config, which documents the app→client binding in version control. The
-secret *is* secret and lives only in a systemd-creds file (Grafana,
-caddy-security) or the app's own DB (Immich, Forgejo) — never in Nix/git.
-Pocket ID 2.x has no declarative client config: both values are assigned by
-the IdP, so if its DB is lost and clients are recreated, every app's id
-*and* secret must be re-synced (a visible diff for the id; a rotation for
-the secret).
+Each Pocket ID client has a **client id** (a random UUID Pocket ID assigns)
+and a **client secret**, and Pocket ID 2.x has no declarative client config —
+both are minted by the IdP and stored only in its DB. So neither is a
+reproducible value: hard-coding the id in Nix would only ever be correct
+against *this* machine's Pocket ID DB (a from-scratch rebuild mints a
+different UUID and the hard-coded id would point at nothing). The id is *not*
+confidential — it rides in the browser redirect — but because it is
+IdP-issued, non-reproducible state, it is kept out of Nix as a matched pair
+with the secret — but loaded per confidentiality: the **id** is a plaintext
+`LoadCredential` file (no point encrypting a public value into an opaque blob
+you can't `cat`), the **secret** is `LoadCredentialEncrypted` (systemd-creds).
+Both reach the app via `$__file{}` (Grafana, caddy) or are entered together
+in the app's own DB (Immich, Forgejo); Nix references them by path only. If
+the Pocket ID DB is lost and clients are recreated, every app's id *and*
+secret must be re-created together with the new values.
 
 ### Rotating a client secret
 
