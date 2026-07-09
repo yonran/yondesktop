@@ -835,18 +835,44 @@ in
       order authenticate before respond
       order authorize before reverse_proxy
 
-      # Configure caddy-security app: Google OIDC portal and policy
+      # Configure caddy-security app: OIDC portal and policy. Two IdPs are
+      # enabled during the Google->Pocket ID migration; Google is retired
+      # once Pocket ID login is confirmed.
       security {
         # Define Google OAuth2 IdP using shortcut (client_id client_secret).
         # {$VAR} is expanded at Caddyfile-adapt time to the credential file path;
         # caddy-security resolves the outer {file.} during Provision() (v1.1.57+).
         oauth identity provider google {file.{$GOOGLE_CLIENT_ID_FILE}} {file.{$GOOGLE_CLIENT_SECRET_FILE}}
 
+        # Self-hosted Pocket ID (generic OIDC driver). Endpoints/jwks are
+        # auto-discovered from metadata_url. Pocket ID is proxied by THIS same
+        # caddy, so a synchronous discovery fetch during Provision() would
+        # dead-lock caddy startup (caddy asking caddy before it listens; see
+        # greenpau/caddy-security#282). delay_start defers the fetch until
+        # after caddy is up, and retry_* re-tries until Pocket ID answers.
+        # client id (not secret) + secret come from credential files, same
+        # {file.{$VAR}} pattern as google. Callback slug uses the provider
+        # name: /auth/oauth2/pocketid/authorization-code-callback (registered
+        # on the Pocket ID client for prometheus + unlock hosts).
+        oauth identity provider pocketid {
+          realm pocketid
+          driver generic
+          client_id {file.{$POCKETID_CLIENT_ID_FILE}}
+          client_secret {file.{$POCKETID_CLIENT_SECRET_FILE}}
+          scopes openid email profile
+          base_auth_url https://id.yonathan.org/
+          metadata_url https://id.yonathan.org/.well-known/openid-configuration
+          delay_start 5
+          retry_attempts 3
+          retry_interval 5
+        }
+
         # Authentication portal issues/validates tokens; requires a signing key
           authentication portal myportal {
             # Provide a signing key from file
             crypto key sign-verify {file.{$AUTH_SIGN_KEY_FILE}}
             enable identity provider google
+            enable identity provider pocketid
           }
 
         # Authorization policy: verify same key and set login URL
@@ -1065,6 +1091,17 @@ in
       "google_client_secret:/etc/secrets/google_client_secret"
       # Signing key for caddy-security tokens
       "auth_sign_key:/etc/secrets/caddy_auth_sign_key.cred"
+      # caddy-security portal's Pocket ID client secret (systemd-creds
+      # encrypted). Named per service (caddy_*) because /etc/secrets is a
+      # global namespace where every app has a "pocketid client secret".
+      "caddy_pocketid_client_secret:/etc/secrets/caddy_pocketid_client_secret.cred"
+    ];
+    # The Pocket ID client id is not secret (rides in the browser redirect),
+    # so it is a plaintext credential rather than encrypted — same reasoning
+    # as grafana_oauth_client_id; it is kept out of Nix only because Pocket ID
+    # mints it (a random UUID) and it is machine-specific DB state.
+    serviceConfig.LoadCredential = [
+      "caddy_pocketid_client_id:/etc/secrets/caddy_pocketid_client_id"
     ];
     # Use a dedicated runtime dir for caddy and place the envfile under $RUNTIME_DIRECTORY/caddy
     serviceConfig.RuntimeDirectory = "caddy";
@@ -1075,6 +1112,8 @@ in
       "GOOGLE_CLIENT_ID_FILE=%d/google_client_id"
       "GOOGLE_CLIENT_SECRET_FILE=%d/google_client_secret"
       "AUTH_SIGN_KEY_FILE=%d/auth_sign_key"
+      "POCKETID_CLIENT_ID_FILE=%d/caddy_pocketid_client_id"
+      "POCKETID_CLIENT_SECRET_FILE=%d/caddy_pocketid_client_secret"
     ];
   };
 

@@ -230,9 +230,24 @@ on local smbpasswd accounts.
      ZFS-backed DB across redeploys, but the scopes fix is NOT in Nix
      (auth sources can't be) — recreate it with the scopes above if the DB
      is ever lost.
-   - caddy-security: replace the `google` identity provider with a
-     `generic` OAuth provider pointing at Pocket ID (then the Google
-     OAuth client can be retired).
+   - caddy-security (portal for prometheus + unlock): Pocket ID added as a
+     second `generic` OIDC provider alongside google — DONE 2026-07-09
+     (client "caddy-security"). Config in configuration.nix `security {}`:
+     `driver generic`, `metadata_url` auto-discovery, and crucially
+     `delay_start`/`retry_*` because Pocket ID is proxied by this SAME caddy
+     — a synchronous discovery fetch during Provision() would dead-lock caddy
+     startup (greenpau/caddy-security#282). id/secret are creds
+     (`caddy_pocketid_client_{id,secret}`, id plaintext, secret encrypted).
+     Callback slug is the provider name: `/auth/oauth2/pocketid/
+     authorization-code-callback` (registered on the client for both the
+     prometheus and unlock hosts, since the portal is served per-host at
+     /auth). Both providers are enabled during the transition; retire google
+     (drop `oauth identity provider google`, its `enable` line, and the
+     google_client_* creds/env) once Pocket ID login is confirmed.
+     Note: after OAuth login the portal lands on /auth/portal (its home)
+     rather than bouncing back to the original app — caddy-security does not
+     preserve the redirect_url across the IdP round-trip; re-open the app URL
+     to proceed. Optional `ui { link ... }` tiles make that page useful.
 
 ### client id vs client secret
 
@@ -274,8 +289,11 @@ keep working), so place-and-restart promptly.
 
   The `--name` must equal the LoadCredentialEncrypted id
   (`grafana_oauth_client_secret`, see home-monitoring.nix). caddy-security's
-  secret rotates the same way once wired: `--name=pocketid_client_secret`,
-  file `/etc/secrets/pocketid_client_secret`, restart `caddy`.
+  secret rotates the same way: `--name=caddy_pocketid_client_secret`, file
+  `/etc/secrets/caddy_pocketid_client_secret.cred`, restart `caddy` (its
+  client id is the plaintext `/etc/secrets/caddy_pocketid_client_id`). The
+  `caddy_`/`grafana_` service prefix disambiguates /etc/secrets, where every
+  app has a "pocketid client secret".
 - Immich (secret in Immich's DB): paste into Admin → Settings →
   Authentication → OAuth → Client Secret, Save.
 - Forgejo (secret in Forgejo's DB): paste into Site Administration →
