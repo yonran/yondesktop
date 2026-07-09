@@ -873,6 +873,21 @@ in
             crypto key sign-verify {file.{$AUTH_SIGN_KEY_FILE}}
             enable identity provider google
             enable identity provider pocketid
+            # Home-dashboard tiles shown on /auth/portal after login. Icons are
+            # Line Awesome (las la-*) classes bundled with caddy-security (no
+            # external fetch). This is just a launcher: prometheus + unlock use
+            # this portal's session; the rest do their own Pocket ID auth.
+            ui {
+              links {
+                "Prometheus"     https://prometheus.yonathan.org/    icon "las la-fire"
+                "ZFS Unlock"     https://unlock.yonathan.org/        icon "las la-unlock-alt"
+                "Grafana"        https://grafana.yonathan.org/       icon "las la-chart-line"
+                "Immich"         https://photos.yonathan.org/        icon "las la-images"
+                "Forgejo"        https://git.yonathan.org/           icon "las la-code-branch"
+                "Jellyfin"       https://jellyfin.yonathan.org/      icon "las la-film"
+                "Home Assistant" https://homeassistant.yonathan.org/ icon "las la-home"
+              }
+            }
           }
 
         # Authorization policy: verify same key and set login URL
