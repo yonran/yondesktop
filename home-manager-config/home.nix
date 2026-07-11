@@ -10,6 +10,40 @@
 
 let
   username = "yonran";
+
+  # OpenMessage: local-first Google Messages (SMS/RCS) bridge + MCP server, so
+  # Claude can search/read/send texts. Runs as a per-user LaunchAgent (below) so
+  # it has login-keychain access — `serve`'s reconnect watchdog renews the Google
+  # account cookies natively from the local Chrome profile when they expire. That
+  # renewal reads Chrome's "Chrome Safe Storage" key from the login keychain
+  # in-process (internal/googlecookies/secret_darwin.go, via the Security
+  # framework — NOT by shelling out to /usr/bin/security), so the keychain ACL
+  # grant is scoped to this binary rather than the general-purpose `security`
+  # tool. That keychain access is why this is a LaunchAgent, not a LaunchDaemon.
+  #
+  # Built from a personal fork pinned below (yonran/openmessage, branch
+  # fix/google-cookie-selfheal) which carries two fixes over upstream 54c8a44:
+  # (1) route long-poll/ping 401s through the auth-expired path so the watchdog
+  # self-heals a rotated cookie instead of looping reconnect→401 (no more manual
+  # restarts); (2) the in-process keychain read above.
+  # Upstream: https://github.com/maxghenis/openmessage
+  openmessage = pkgs.buildGoModule {
+    pname = "openmessage";
+    version = "0-unstable-2026-07-11";
+    src = pkgs.fetchFromGitHub {
+      owner = "yonran";
+      repo = "openmessage";
+      rev = "aac0a17a58fe83653e14fabaf719df4c891f0694";
+      hash = "sha256-qcvHHTrizhHga9us7cetpeyuNkyD/mp5e4DLIPoZ5zg=";
+    };
+    vendorHash = "sha256-/w3DQLdXMuyiqstPRBfjCLfGZnNPK7h7RYHp2NFMxLg=";
+    # main.go at repo root. CGO is on (default) for the Security-framework
+    # keychain read in secret_darwin.go; the Apple SDK in stdenv resolves
+    # -framework Security with no extra buildInputs. sqlite stays pure-Go (modernc).
+    subPackages = [ "." ];
+    doCheck = false;
+    meta.mainProgram = "openmessage";
+  };
 in {
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
@@ -64,6 +98,9 @@ in {
     pkgs.clang
     # for getting the sha256 of fetchFromGitHub
     pkgs.nix-prefetch-github
+  ] ++ lib.optionals (!isWork) [
+    # `openmessage` CLI (pair / read / thread / send) alongside the LaunchAgent.
+    openmessage
   ];
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
@@ -279,6 +316,35 @@ in {
 
       StandardOutPath = "${config.xdg.dataHome}/grafana/logs/stdout.log";
       StandardErrorPath = "${config.xdg.dataHome}/grafana/logs/stderr.log";
+    };
+  };
+
+  # Ensure the OpenMessage log dir exists before launchd opens the log files
+  # (launchd won't create intermediate dirs for StandardOutPath). The SQLite DB
+  # + session.json live in the same ~/.local/share/openmessage dir, created by
+  # `serve` itself; home-manager only manages this .keep, not those.
+  xdg.dataFile."openmessage/logs/.keep" = lib.mkIf (!isWork) { text = ""; };
+
+  # OpenMessage bridge + MCP server. Bound to loopback — Claude runs on this same
+  # laptop and connects at http://127.0.0.1:7007/mcp, so no network exposure at
+  # all. `serve` keeps a long-poll to the phone and writes messages to SQLite; it
+  # natively refreshes Google cookies from Chrome when they expire (see note by
+  # the package definition above). One-time pairing is already done (session.json).
+  launchd.agents.openmessage = lib.mkIf (!isWork) {
+    enable = true;
+    config = {
+      ProgramArguments = [ "${openmessage}/bin/openmessage" "serve" ];
+      EnvironmentVariables = {
+        OPENMESSAGES_HOST = "127.0.0.1";
+        OPENMESSAGES_PORT = "7007";
+        OPENMESSAGES_DATA_DIR = "${config.xdg.dataHome}/openmessage";
+      };
+      KeepAlive = true;
+      RunAtLoad = true;
+      # Avoids the "openmessage is an item that can run in the background" login-items warning.
+      ProcessType = "Background";
+      StandardOutPath = "${config.xdg.dataHome}/openmessage/logs/stdout.log";
+      StandardErrorPath = "${config.xdg.dataHome}/openmessage/logs/stderr.log";
     };
   };
 
