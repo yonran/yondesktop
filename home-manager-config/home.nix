@@ -21,19 +21,19 @@ let
   # grant is scoped to this binary rather than the general-purpose `security`
   # tool. That keychain access is why this is a LaunchAgent, not a LaunchDaemon.
   #
-  # Built from a personal fork pinned below (yonran/openmessage, branch
-  # fix/google-cookie-selfheal) which carries two live fixes over upstream
-  # 54c8a44: (1) route long-poll/ping 401s through the auth-expired path so the
-  # watchdog self-heals a rotated cookie instead of looping reconnect→401 (no
-  # more manual restarts); (2) the in-process keychain read above.
-  #
-  # It ALSO carries an investigated dead end: OPENMESSAGE_PASSIVE /
-  # libgm.Client.DontMarkActive (via a go.mod replace onto yonran/gmessages,
-  # branch feat/passive-no-active-session) was an attempt to stop Google
-  # suppressing phone notifications while the bridge runs. It does NOT work — see
-  # docs/notification-suppression-investigation.md in the fork — so it is left
-  # default OFF below. Root cause is the older ReceiveMessages API generation,
-  # which would need a real new-API migration to fix.
+  # Built from a personal fork (yonran/openmessage branch fix/google-cookie-selfheal;
+  # gmessages fork branch feat/web-device-type-notif-fix) carrying three live fixes
+  # over upstream 54c8a44: (1) route long-poll/ping 401s through the auth-expired
+  # path so the watchdog self-heals a rotated cookie instead of looping
+  # reconnect→401 (no more manual restarts); (2) the in-process keychain read
+  # above; (3) OPENMESSAGE_INACTIVE=1 (set below) makes the ditto-activity ping
+  # report isActive=false, so Google keeps delivering notifications to the PHONE
+  # while the bridge runs — CONFIRMED to restore phone notifications. Root-caused
+  # by reverse-engineering the messages.google.com/web session-activity model
+  # (gmessages fork docs/CAPTURED_FINDINGS.md). Dead ends left in the fork but OFF:
+  # OPENMESSAGE_PASSIVE (skip presence) and UseModernReceive (PullMessages) —
+  # neither fixed notifications; the deviceType=WEB pair-time change alone did not
+  # either (isActive=false was the actual lever).
   # Upstream: https://github.com/maxghenis/openmessage
   openmessage = pkgs.buildGoModule {
     pname = "openmessage";
@@ -41,10 +41,10 @@ let
     src = pkgs.fetchFromGitHub {
       owner = "yonran";
       repo = "openmessage";
-      rev = "7671c1be6b6c42a0e3ca246594952d1bb8f4e6d4";
-      hash = "sha256-2SwtC6+Si5+76DnCKxiwy6D16M9etB41KY8HY90EpFY=";
+      rev = "0f97b1c39a5d18e403150e23e331731b5b8787bf";
+      hash = "sha256-6jIiuFE6RKu25D/gpp3HAZ08W7fPPnznpxzWgQFLz4Y=";
     };
-    vendorHash = "sha256-BWsolx40sQkwN9Ze+IUBvQdA1TKfdnLp9Vdgx+YZRtY=";
+    vendorHash = "sha256-iHteEJ5XTjogQO0YjRqZFbIE81JHxHe6+feVUP+AXxU=";
     # main.go at repo root. CGO is on (default) for the Security-framework
     # keychain read in secret_darwin.go; the Apple SDK in stdenv resolves
     # -framework Security with no extra buildInputs. sqlite stays pure-Go (modernc).
@@ -351,6 +351,9 @@ in {
         # investigation.md). Left OFF. Setting "1" makes the session passive
         # (no active-presence assertion) but weakens liveness for no benefit.
         OPENMESSAGE_PASSIVE = "0";
+        # Report ditto isActive=false so Google keeps notifying the phone (fix
+        # candidate; runtime, no re-pair). See gmessages docs/CAPTURED_FINDINGS.md.
+        OPENMESSAGE_INACTIVE = "1";
       };
       KeepAlive = true;
       RunAtLoad = true;
