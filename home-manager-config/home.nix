@@ -22,10 +22,18 @@ let
   # tool. That keychain access is why this is a LaunchAgent, not a LaunchDaemon.
   #
   # Built from a personal fork pinned below (yonran/openmessage, branch
-  # fix/google-cookie-selfheal) which carries two fixes over upstream 54c8a44:
-  # (1) route long-poll/ping 401s through the auth-expired path so the watchdog
-  # self-heals a rotated cookie instead of looping reconnect→401 (no more manual
-  # restarts); (2) the in-process keychain read above.
+  # fix/google-cookie-selfheal) which carries two live fixes over upstream
+  # 54c8a44: (1) route long-poll/ping 401s through the auth-expired path so the
+  # watchdog self-heals a rotated cookie instead of looping reconnect→401 (no
+  # more manual restarts); (2) the in-process keychain read above.
+  #
+  # It ALSO carries an investigated dead end: OPENMESSAGE_PASSIVE /
+  # libgm.Client.DontMarkActive (via a go.mod replace onto yonran/gmessages,
+  # branch feat/passive-no-active-session) was an attempt to stop Google
+  # suppressing phone notifications while the bridge runs. It does NOT work — see
+  # docs/notification-suppression-investigation.md in the fork — so it is left
+  # default OFF below. Root cause is the older ReceiveMessages API generation,
+  # which would need a real new-API migration to fix.
   # Upstream: https://github.com/maxghenis/openmessage
   openmessage = pkgs.buildGoModule {
     pname = "openmessage";
@@ -33,10 +41,10 @@ let
     src = pkgs.fetchFromGitHub {
       owner = "yonran";
       repo = "openmessage";
-      rev = "aac0a17a58fe83653e14fabaf719df4c891f0694";
-      hash = "sha256-qcvHHTrizhHga9us7cetpeyuNkyD/mp5e4DLIPoZ5zg=";
+      rev = "7671c1be6b6c42a0e3ca246594952d1bb8f4e6d4";
+      hash = "sha256-2SwtC6+Si5+76DnCKxiwy6D16M9etB41KY8HY90EpFY=";
     };
-    vendorHash = "sha256-/w3DQLdXMuyiqstPRBfjCLfGZnNPK7h7RYHp2NFMxLg=";
+    vendorHash = "sha256-BWsolx40sQkwN9Ze+IUBvQdA1TKfdnLp9Vdgx+YZRtY=";
     # main.go at repo root. CGO is on (default) for the Security-framework
     # keychain read in secret_darwin.go; the Apple SDK in stdenv resolves
     # -framework Security with no extra buildInputs. sqlite stays pure-Go (modernc).
@@ -338,6 +346,11 @@ in {
         OPENMESSAGES_HOST = "127.0.0.1";
         OPENMESSAGES_PORT = "7007";
         OPENMESSAGES_DATA_DIR = "${config.xdg.dataHome}/openmessage";
+        # Investigated dead end (does NOT restore phone notifications; see the
+        # package-definition comment and docs/notification-suppression-
+        # investigation.md). Left OFF. Setting "1" makes the session passive
+        # (no active-presence assertion) but weakens liveness for no benefit.
+        OPENMESSAGE_PASSIVE = "0";
       };
       KeepAlive = true;
       RunAtLoad = true;
