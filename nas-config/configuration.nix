@@ -914,6 +914,30 @@ in
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
       }
 
+      # Public static file server for /firstpool/family/public_html.
+      # No auth — deliberately world-readable. NOTE: Caddy's file_server
+      # follows symlinks with no opt-out, and blocks only path-based ../
+      # traversal; a symlink inside public_html pointing outside it will be
+      # served. Do not place symlinks to secrets under this root.
+      #
+      # Directory listings (browse) are gated by depth: any subdirectory is
+      # browsable, but the bare root / is NOT enumerable — a visitor must
+      # know at least the first path segment. Files are still served at any
+      # depth if the exact URL is known.
+      @home host home.yonathan.org
+      handle @home {
+        root * /firstpool/family/public_html
+        # 1+ segments ending in a slash => a subdirectory request (root / excluded)
+        @browsable path_regexp ^(/[^/]+)+/$
+        handle @browsable {
+          file_server browse
+        }
+        # Everything else: serve files, but no directory listing (404 on bare dirs)
+        handle {
+          file_server
+        }
+      }
+
       @photos host photos.yonathan.org
       handle @photos {
         # Rate limit only auth endpoints, then proxy everything
