@@ -44,10 +44,10 @@ let
     src = pkgs.fetchFromGitHub {
       owner = "yonran";
       repo = "openmessage";
-      rev = "04c8e457970ba3630d585f85a542e0e0c4603393";
-      hash = "sha256-FSfTXgnYNZUqFAYTF9CXI1XCjykUVsIb7i6deyhkZ9M=";
+      rev = "8725252fd7d91bca519d8b6119d636ae30086f39";
+      hash = "sha256-KZeQd+TB/q+eqzJcpNwFnFNZ0LNEdjx4zavTql/pjgU=";
     };
-    vendorHash = "sha256-oVLS2VnuKOJut39Mb6HeCVdKLzropHN/1Ouro+EeKIw=";
+    vendorHash = "sha256-c0wumZPO843ZrAwhHQTd/I/Jiiz5ma5WXizSYPatLY0=";
     # main.go at repo root. CGO is on (default) for the Security-framework
     # keychain read in secret_darwin.go; the Apple SDK in stdenv resolves
     # -framework Security with no extra buildInputs. sqlite stays pure-Go (modernc).
@@ -357,6 +357,15 @@ in {
         # Report ditto isActive=false so Google keeps notifying the phone (fix
         # candidate; runtime, no re-pair). See gmessages docs/CAPTURED_FINDINGS.md.
         OPENMESSAGE_INACTIVE = "1";
+        # Receive safety-net. The modern long-poll can go silently deaf (delivers
+        # nothing while still "connected"): in isActive=false mode the ditto ping
+        # is never acked, so libgm can't detect a dead long-poll, and its fallback
+        # check is ~3-hourly — so inbound SMS/RCS silently stops for hours. This
+        # pulls recent conversations via the request/response API every N seconds
+        # (independent of the long-poll), bounding worst-case receive latency to
+        # the interval. Proven with OPENMESSAGE_DROP_LONGPOLL (a debug flag that
+        # forces reconcile-only delivery). See docs/receive-reliability-labnotebook.md.
+        OPENMESSAGE_RECONCILE_SECS = "120";
         # Read Google cookies from a dedicated Chrome profile ("openmessage",
         # signed into yonathan@gmail.com, otherwise never opened) instead of the
         # live Default profile. Google session cookies are a rotation CHAIN:
