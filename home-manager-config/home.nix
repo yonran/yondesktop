@@ -28,7 +28,10 @@ let
   # reconnect→401 (no more manual restarts); (2) the in-process keychain read
   # above; (3) OPENMESSAGE_INACTIVE=1 (set below) makes the ditto-activity ping
   # report isActive=false, so Google keeps delivering notifications to the PHONE
-  # while the bridge runs — CONFIRMED to restore phone notifications. Root-caused
+  # while the bridge runs — CONFIRMED to restore phone notifications; (4) persist
+  # the session on cookie rotation (CookiesUpdated) so the daemon can own a
+  # dedicated Chrome profile's cookie chain (see OPENMESSAGE_CHROME_PROFILE
+  # below) instead of fighting the live profile over rotations. Root-caused
   # by reverse-engineering the messages.google.com/web session-activity model
   # (gmessages fork docs/CAPTURED_FINDINGS.md). Dead ends left in the fork but OFF:
   # OPENMESSAGE_PASSIVE (skip presence) and UseModernReceive (PullMessages) —
@@ -37,14 +40,14 @@ let
   # Upstream: https://github.com/maxghenis/openmessage
   openmessage = pkgs.buildGoModule {
     pname = "openmessage";
-    version = "0-unstable-2026-07-11";
+    version = "0-unstable-2026-07-14";
     src = pkgs.fetchFromGitHub {
       owner = "yonran";
       repo = "openmessage";
-      rev = "0f97b1c39a5d18e403150e23e331731b5b8787bf";
-      hash = "sha256-6jIiuFE6RKu25D/gpp3HAZ08W7fPPnznpxzWgQFLz4Y=";
+      rev = "04c8e457970ba3630d585f85a542e0e0c4603393";
+      hash = "sha256-FSfTXgnYNZUqFAYTF9CXI1XCjykUVsIb7i6deyhkZ9M=";
     };
-    vendorHash = "sha256-iHteEJ5XTjogQO0YjRqZFbIE81JHxHe6+feVUP+AXxU=";
+    vendorHash = "sha256-oVLS2VnuKOJut39Mb6HeCVdKLzropHN/1Ouro+EeKIw=";
     # main.go at repo root. CGO is on (default) for the Security-framework
     # keychain read in secret_darwin.go; the Apple SDK in stdenv resolves
     # -framework Security with no extra buildInputs. sqlite stays pure-Go (modernc).
@@ -354,6 +357,18 @@ in {
         # Report ditto isActive=false so Google keeps notifying the phone (fix
         # candidate; runtime, no re-pair). See gmessages docs/CAPTURED_FINDINGS.md.
         OPENMESSAGE_INACTIVE = "1";
+        # Read Google cookies from a dedicated Chrome profile ("openmessage",
+        # signed into yonathan@gmail.com, otherwise never opened) instead of the
+        # live Default profile. Google session cookies are a rotation CHAIN:
+        # every logged-in google.com request re-issues SIDCC-family values and
+        # invalidates superseded ones. Sharing Default's chain meant Chrome
+        # always held the newest link and the daemon's copy died ~18 min later
+        # (401 SESSION_COOKIE_INVALID -> reconnect -> new session -> "Device
+        # pairing" notification on the phone, every 20 min). With an idle
+        # profile the daemon is the chain's sole owner: libgm applies Set-Cookie
+        # rotations and persists them to session.json on CookiesUpdated, so the
+        # session survives indefinitely and restarts resume the live chain.
+        OPENMESSAGE_CHROME_PROFILE = "${config.home.homeDirectory}/Library/Application Support/Google/Chrome/Profile 2";
       };
       KeepAlive = true;
       RunAtLoad = true;
