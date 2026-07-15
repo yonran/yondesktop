@@ -22,7 +22,7 @@ let
   # tool. That keychain access is why this is a LaunchAgent, not a LaunchDaemon.
   #
   # Built from a personal fork (yonran/openmessage branch fix/google-cookie-selfheal;
-  # gmessages fork branch feat/web-device-type-notif-fix) carrying five live fixes
+  # gmessages fork branch feat/web-device-type-notif-fix) carrying six live fixes
   # over upstream 54c8a44: (1) route long-poll/ping 401s through the auth-expired
   # path so the watchdog self-heals a rotated cookie instead of looping
   # reconnect→401 (no more manual restarts); (2) the in-process keychain read
@@ -39,6 +39,12 @@ let
   # A healthy stream heartbeats every ~10s (measured), so if no frame arrives
   # within 30s the stream is dead → close+reconnect. This is the liveness
   # detection the real web client has; tune via OPENMESSAGE_RECEIVE_IDLE_SECS.
+  # (6) periodic reconcile pull (OPENMESSAGE_RECONCILE_SECS below): the idle
+  # deadline only recovers a DEAD stream. An isActive=false client also suffers a
+  # LIVE-but-withholding stream — Google does not stream inbound to an inactive
+  # web client (routes to phone), so the long-poll stays healthy but delivers
+  # nothing for hours. The only fix is to pull recent conversations via the
+  # request/response API on a timer. Both (5) and (6) are needed.
   # Root-caused/validated in openmessage docs/receive-reliability-labnotebook.md;
   # web-client protocol in gmessages docs/CAPTURED_FINDINGS.md. Dead ends left in
   # the fork but OFF: OPENMESSAGE_PASSIVE (skip presence) and UseModernReceive
@@ -52,8 +58,8 @@ let
     src = pkgs.fetchFromGitHub {
       owner = "yonran";
       repo = "openmessage";
-      rev = "131608338599363d838a91ebec2e8b18fc49a3ff";
-      hash = "sha256-f1V1kItmktkpY1drsfUCumbtOKjbVKKpQxSGqCpEvA8=";
+      rev = "2294b4d50d5d31d4c04931ccf7b699ef5bec00cb";
+      hash = "sha256-PPZHhKx4wzT1+TcDuT7Wz8+xaiexpQA/LWZq7WS0XiU=";
     };
     vendorHash = "sha256-iJ/OpyrwuVmGD/Oxo7leisoioMDrm4qXbnPefP/+UQQ=";
     # main.go at repo root. CGO is on (default) for the Security-framework
@@ -365,9 +371,13 @@ in {
         # Report ditto isActive=false so Google keeps notifying the phone (fix
         # candidate; runtime, no re-pair). See gmessages docs/CAPTURED_FINDINGS.md.
         OPENMESSAGE_INACTIVE = "1";
-        # (Receive reliability is handled inside libgm by an idle read-deadline on
-        # the ReceiveMessages long-poll — see fix (5) in the package comment above.
-        # OPENMESSAGE_RECEIVE_IDLE_SECS can tune it; unset = 30s default.)
+        # Receive path for our isActive=false (phone-notifying) client: Google does
+        # NOT stream inbound to an inactive web client (it notifies the phone), so
+        # the long-poll stays alive but delivers nothing — pull recent conversations
+        # via the request/response API every N seconds. REQUIRED, not optional.
+        # See fixes (5) idle-deadline [dead stream] and (6) reconcile [withheld
+        # stream] in the package comment. RECEIVE_IDLE_SECS tunes the deadline.
+        OPENMESSAGE_RECONCILE_SECS = "120";
         # Read Google cookies from a dedicated Chrome profile ("openmessage",
         # signed into yonathan@gmail.com, otherwise never opened) instead of the
         # live Default profile. Google session cookies are a rotation CHAIN:
