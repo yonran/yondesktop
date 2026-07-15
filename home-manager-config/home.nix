@@ -22,7 +22,7 @@ let
   # tool. That keychain access is why this is a LaunchAgent, not a LaunchDaemon.
   #
   # Built from a personal fork (yonran/openmessage branch fix/google-cookie-selfheal;
-  # gmessages fork branch feat/web-device-type-notif-fix) carrying three live fixes
+  # gmessages fork branch feat/web-device-type-notif-fix) carrying five live fixes
   # over upstream 54c8a44: (1) route long-poll/ping 401s through the auth-expired
   # path so the watchdog self-heals a rotated cookie instead of looping
   # reconnect→401 (no more manual restarts); (2) the in-process keychain read
@@ -31,12 +31,20 @@ let
   # while the bridge runs — CONFIRMED to restore phone notifications; (4) persist
   # the session on cookie rotation (CookiesUpdated) so the daemon can own a
   # dedicated Chrome profile's cookie chain (see OPENMESSAGE_CHROME_PROFILE
-  # below) instead of fighting the live profile over rotations. Root-caused
-  # by reverse-engineering the messages.google.com/web session-activity model
-  # (gmessages fork docs/CAPTURED_FINDINGS.md). Dead ends left in the fork but OFF:
-  # OPENMESSAGE_PASSIVE (skip presence) and UseModernReceive (PullMessages) —
-  # neither fixed notifications; the deviceType=WEB pair-time change alone did not
-  # either (isActive=false was the actual lever).
+  # below) instead of fighting the live profile over rotations; (5) an idle
+  # read-deadline on the ReceiveMessages long-poll. The stream can go silently
+  # deaf (no data, no heartbeat, no error — a half-open connection) and libgm's
+  # foreground read loop had NO deadline, so reader.Read blocked forever and
+  # inbound SMS/RCS silently stopped for hours until some other path reconnected.
+  # A healthy stream heartbeats every ~10s (measured), so if no frame arrives
+  # within 30s the stream is dead → close+reconnect. This is the liveness
+  # detection the real web client has; tune via OPENMESSAGE_RECEIVE_IDLE_SECS.
+  # Root-caused/validated in openmessage docs/receive-reliability-labnotebook.md;
+  # web-client protocol in gmessages docs/CAPTURED_FINDINGS.md. Dead ends left in
+  # the fork but OFF: OPENMESSAGE_PASSIVE (skip presence) and UseModernReceive
+  # (PullMessages is a keep-alive heartbeat stream, not a receive path); the
+  # deviceType=WEB pair-time change did not fix notifications (isActive=false
+  # was the lever).
   # Upstream: https://github.com/maxghenis/openmessage
   openmessage = pkgs.buildGoModule {
     pname = "openmessage";
@@ -44,10 +52,10 @@ let
     src = pkgs.fetchFromGitHub {
       owner = "yonran";
       repo = "openmessage";
-      rev = "8725252fd7d91bca519d8b6119d636ae30086f39";
-      hash = "sha256-KZeQd+TB/q+eqzJcpNwFnFNZ0LNEdjx4zavTql/pjgU=";
+      rev = "131608338599363d838a91ebec2e8b18fc49a3ff";
+      hash = "sha256-f1V1kItmktkpY1drsfUCumbtOKjbVKKpQxSGqCpEvA8=";
     };
-    vendorHash = "sha256-c0wumZPO843ZrAwhHQTd/I/Jiiz5ma5WXizSYPatLY0=";
+    vendorHash = "sha256-iJ/OpyrwuVmGD/Oxo7leisoioMDrm4qXbnPefP/+UQQ=";
     # main.go at repo root. CGO is on (default) for the Security-framework
     # keychain read in secret_darwin.go; the Apple SDK in stdenv resolves
     # -framework Security with no extra buildInputs. sqlite stays pure-Go (modernc).
@@ -357,15 +365,9 @@ in {
         # Report ditto isActive=false so Google keeps notifying the phone (fix
         # candidate; runtime, no re-pair). See gmessages docs/CAPTURED_FINDINGS.md.
         OPENMESSAGE_INACTIVE = "1";
-        # Receive safety-net. The modern long-poll can go silently deaf (delivers
-        # nothing while still "connected"): in isActive=false mode the ditto ping
-        # is never acked, so libgm can't detect a dead long-poll, and its fallback
-        # check is ~3-hourly — so inbound SMS/RCS silently stops for hours. This
-        # pulls recent conversations via the request/response API every N seconds
-        # (independent of the long-poll), bounding worst-case receive latency to
-        # the interval. Proven with OPENMESSAGE_DROP_LONGPOLL (a debug flag that
-        # forces reconcile-only delivery). See docs/receive-reliability-labnotebook.md.
-        OPENMESSAGE_RECONCILE_SECS = "120";
+        # (Receive reliability is handled inside libgm by an idle read-deadline on
+        # the ReceiveMessages long-poll — see fix (5) in the package comment above.
+        # OPENMESSAGE_RECEIVE_IDLE_SECS can tune it; unset = 30s default.)
         # Read Google cookies from a dedicated Chrome profile ("openmessage",
         # signed into yonathan@gmail.com, otherwise never opened) instead of the
         # live Default profile. Google session cookies are a rotation CHAIN:
