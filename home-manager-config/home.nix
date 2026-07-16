@@ -40,13 +40,15 @@ let
   # to a session whose stream reconnected without a fresh activity assertion —
   # the reopened poll stays healthy (HTTP 200, heartbeats) but delivers nothing.
   # The real web client re-asserts on every tab hidden→visible transition
-  # (labnotebook runs J–Q, 2026-07-15). The bridge now runs isActive=true like a
-  # real (backgrounded) web tab — run L proved an active web client does NOT
-  # suppress phone notifications; the earlier contrary finding dated from the
-  # reconnect-churn era before the dedicated profile. Retired accordingly:
-  # OPENMESSAGE_INACTIVE=1 (isActive=false is excluded from stream fan-out —
-  # runs J/K — and needed the reconcile crutch) and OPENMESSAGE_RECONCILE_SECS
-  # (the periodic pull; both code paths remain, env-disabled, as the documented
+  # (labnotebook runs J–Q, 2026-07-15). (6) SkipDittoPings
+  # (OPENMESSAGE_NO_PINGS below): send NO periodic NOTIFY_DITTO_ACTIVITY at
+  # all — its isActive flag has no good value for a headless bridge (true
+  # re-suppresses the phone's ring/vibration every minute — measured, run S
+  # era user report; false revokes stream fan-out — run K); a real
+  # backgrounded tab sends neither and gets BOTH stream delivery and a ringing
+  # phone (runs J+L). Liveness falls to the idle read-deadline. Retired
+  # accordingly: OPENMESSAGE_INACTIVE and OPENMESSAGE_RECONCILE_SECS (the
+  # periodic pull; both code paths remain, env-disabled, as the documented
   # fallback). Root-caused/validated in openmessage
   # docs/receive-reliability-labnotebook.md; web-client protocol in gmessages
   # docs/CAPTURED_FINDINGS.md. Dead ends left in the fork but OFF:
@@ -59,10 +61,10 @@ let
     src = pkgs.fetchFromGitHub {
       owner = "yonran";
       repo = "openmessage";
-      rev = "e9c4fae07d30251990ea1f3d90e19b48cb6a8b94";
-      hash = "sha256-3Z0mqBP9sHO90BTF3oIN6SMfzbvQQn+ZOQOHhvsPxw8=";
+      rev = "a45e44b625d0b5654032077437205a2dadca1aaf";
+      hash = "sha256-j8R0GKQICAXwOJji5Tq0WRfAbXhw+r2gd+KAqhnTnic=";
     };
-    vendorHash = "sha256-C8fomAC7/Fg3gww5ryWPxGHHKkCRjM76NIcLJHHv2XY=";
+    vendorHash = "sha256-vWHkfE7GoP4Q2W0MnamFyLf6d/B/QvGBmxBlnqBCWQk=";
     # main.go at repo root. CGO is on (default) for the Security-framework
     # keychain read in secret_darwin.go; the Apple SDK in stdenv resolves
     # -framework Security with no extra buildInputs. sqlite stays pure-Go (modernc).
@@ -369,12 +371,15 @@ in {
         # investigation.md). Left OFF. Setting "1" makes the session passive
         # (no active-presence assertion) but weakens liveness for no benefit.
         OPENMESSAGE_PASSIVE = "0";
-        # Replicate the real web client exactly: isActive=true, stream-only,
-        # no reconcile (see fix (5) in the package comment; labnotebook runs
-        # J–Q 2026-07-15). If phone notifications ever regress, REVERT to
-        # INACTIVE="1" + RECONCILE_SECS="120" (isActive=false is withheld from
-        # stream fan-out — runs J/K — so the reconcile pull is its required
-        # receive path; both code paths remain in the fork).
+        # Backgrounded-tab replica (labnotebook runs J–R, 2026-07-15/16):
+        # NO periodic ditto pings — isActive=true pings re-suppress the
+        # phone's ring/vibration every minute, isActive=false pings revoke
+        # stream fan-out; a real backgrounded tab sends neither and gets BOTH
+        # stream delivery and a ringing phone. SetActiveSession-on-connect and
+        # reassert-on-reopen still run; liveness = the 30s idle read-deadline.
+        # Fallback if this regresses: NO_PINGS=0 + INACTIVE=1 +
+        # RECONCILE_SECS=120 (phone rings; receive via 120s reconcile pull).
+        OPENMESSAGE_NO_PINGS = "1";
         OPENMESSAGE_INACTIVE = "0";
         OPENMESSAGE_RECONCILE_SECS = "0";
         # Read Google cookies from a dedicated Chrome profile ("openmessage",
