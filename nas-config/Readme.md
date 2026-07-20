@@ -299,9 +299,65 @@ keep working), so place-and-restart promptly.
 - Forgejo (secret in Forgejo's DB): paste into Site Administration →
   Identity & access → Authentication sources → `pocket-id` → Client Secret,
   Save (restart Forgejo to be safe).
+- rustdesk-api (secret in rustdesk-api's own DB, no NixOS config involved):
+  paste into its admin panel → OAuth Management → the Pocket ID provider
+  entry → Client Secret, Save.
 
 Warning: passkeys are bound to the hostname (WebAuthn RP ID). Renaming
 id.yonathan.org invalidates every enrolled passkey.
+
+## Configure RustDesk (self-hosted relay + API/admin server)
+
+RustDesk's OSS `hbbs`/`hbbr` (services.rustdesk-server) provide the
+ID/relay servers — TCP/UDP on ports 21115-21117, DNAT'd straight through
+by the router, never touching Caddy. `rustdesk-api`
+(modules/rustdesk-api.nix, https://github.com/lejianwen/rustdesk-api) adds
+the account/admin-console layer official RustDesk only ships as paid
+Server Pro: a web admin console (device list, login/connection/file-transfer
+audit logs), accounts, and address-book sync. All three (ID server, relay
+server, API server) share one hostname, `rustdesk.yonathan.org` — a DNS
+name doesn't care which port it's used with, and the API server (HTTPS,
+Caddy-routed by hostname) and the raw hbbs/hbbr ports coexist on it with
+zero extra DNS/router config, since the existing `*.yonathan.org` wildcard
+already covers it.
+
+Auth is native to rustdesk-api itself (not Caddy's `authorize with
+mypolicy` layer) — password login now, OIDC-only via Pocket ID once
+bootstrapped. Order matters below: the JWT secret must exist before the
+container's systemd unit can start, and password login must stay on just
+long enough to wire up OIDC, or you lock yourself out.
+
+1. Before the first deploy, on the NAS, generate and encrypt the JWT
+   signing key:
+
+   ```
+   head -c 32 /dev/urandom | base64 | sudo systemd-creds encrypt \
+     --name=rustdesk_api_jwt_key - /etc/secrets/rustdesk_api_jwt_key.cred
+   ```
+
+2. Deploy (`nas-config/deploy-over-ssh.sh`) with
+   `services.rustdesk-api.disablePwdLogin = false` (the default). Then
+   `podman logs rustdesk-api` once to capture the auto-generated initial
+   admin password.
+3. Log into `https://rustdesk.yonathan.org/_admin/` with that password;
+   change it.
+4. In Pocket ID, create an OIDC client for `rustdesk-api`, redirect URI
+   `https://rustdesk.yonathan.org/api/oidc/callback`.
+5. In rustdesk-api's admin panel (OAuth Management), add an OIDC provider:
+   issuer `https://id.yonathan.org`, the client id/secret from step 4,
+   scopes `openid,email,profile`, and turn on **AutoRegister** — a
+   first-time OIDC login then auto-creates the local (always non-admin)
+   rustdesk-api account, no separate pre-created account needed. Since
+   Pocket ID has no open self-registration, this doesn't reopen anything;
+   adding a new person only ever means creating them in Pocket ID.
+6. Bind your own admin account to your Pocket ID identity (the "bind" flow
+   from step 5) and confirm OIDC login works end-to-end for it — do this
+   *before* the next step, or you'll lock yourself out.
+7. Set `services.rustdesk-api.disablePwdLogin = true`, redeploy. Password
+   login is now off entirely; OIDC via Pocket ID is the only way in.
+8. On each RustDesk client you want synced, set **API Server** =
+   `https://rustdesk.yonathan.org` (in addition to the ID/Relay/Key already
+   configured), then log in via the OIDC option.
 
 ## Configure sb-exporter
 

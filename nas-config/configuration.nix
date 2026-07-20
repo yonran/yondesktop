@@ -263,6 +263,7 @@ in
       ./modules/zfs-unlock-web.nix
       ./modules/forgejo.nix
       ./modules/pocket-id.nix
+      ./modules/rustdesk-api.nix
     ];
   # Socket buffer tuning for TCP over high-latency links
   #
@@ -1049,6 +1050,31 @@ in
         reverse_proxy 127.0.0.1:1411
       }
 
+      # RustDesk API/admin server (see modules/rustdesk-api.nix). Auth is
+      # native to the app (password now, OIDC-only via Pocket ID once
+      # bootstrapped — see the module header) — same posture as
+      # Immich/Jellyfin/Forgejo/Home Assistant/Pocket ID below, not the
+      # Caddy-layer `authorize with mypolicy` pattern used for
+      # unlock.yonathan.org/prometheus.yonathan.org. No IP restriction on
+      # /_admin: unlike id.yonathan.org's /setup (genuinely unauthenticated,
+      # no admin exists yet), /_admin here is login-gated the whole time.
+      @rustdeskapi host rustdesk.yonathan.org
+      handle @rustdeskapi {
+        rate_limit {
+          zone rustdeskapi_auth_zone {
+            key {remote_host}
+            events 5
+            window 60s
+            match {
+              method POST
+              path /api/login /api/admin/login
+            }
+          }
+        }
+
+        reverse_proxy 127.0.0.1:21114
+      }
+
       # Home Assistant
       @homeassistant host homeassistant.yonathan.org
       handle @homeassistant {
@@ -1438,12 +1464,23 @@ in
     # hbbs needs a relay host to hand to clients; without it the module passes an
     # empty `--relay-servers` and hbbs refuses to start. hbbr runs on this box, so
     # advertise the public address clients use (relay port 21117 opened above).
-    signal.relayHosts = [ "home.yonathan.org" ];
+    # rustdesk.yonathan.org (not the generic home.yonathan.org) is the single
+    # hostname for all three RustDesk endpoints (ID/relay/API) — see
+    # modules/rustdesk-api.nix, which reads this same relayHosts value.
+    signal.relayHosts = [ "rustdesk.yonathan.org" ];
     # Enforce the server key (--key _ uses the generated id_ed25519 keypair). Without
     # this the server is an open relay: anyone who reaches it can register/relay.
     # With it, only clients configured with the public key can use the server.
     signal.extraArgs = [ "--key" "_" ];
     relay.extraArgs = [ "--key" "_" ];
+  };
+
+  services.rustdesk-api = {
+    enable = true;
+    # See modules/rustdesk-api.nix header for the full bootstrap sequence;
+    # this must stay false until OIDC login is confirmed working for the
+    # admin account, or flipping it locks you out.
+    disablePwdLogin = false;
   };
 
   services.owntracks-recorder.enable = true;
