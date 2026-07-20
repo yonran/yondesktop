@@ -1,7 +1,10 @@
--- Synced to the LIVE function on 2026-06-21 (Immich v2.7.5 schema).
+-- Synced to the LIVE function on 2026-07-20 (Immich v3.0.3 schema).
 -- NOTE: modern singular schema — "album"/"asset"/"album_asset" ("albumId"/"assetId"),
 -- "album_user" ("userId"/"role"), "asset"."visibility" enum ('archive') — NOT the old
 -- "albums"/"assets"/"albums_assets_assets"/"albums_shared_users_users"/"isArchived".
+-- v3 CHANGE (2026-07-20): "album"."ownerId" was REMOVED in Immich v3. The album owner
+-- is now the "album_user" row with "role" = 'owner' (the role enum gained 'owner').
+-- Every owner lookup below reads album_user, not album.ownerId.
 -- Applied manually via psql:
 --   sudo podman exec -i immich-database psql -U postgres -d immich -f <thisfile>
 
@@ -13,10 +16,11 @@ DECLARE
 BEGIN
     -- Check if the file is from WhatsApp by filename pattern
     IF NEW."originalFileName" ~ '^IMG-[0-9]{8}-WA[0-9]+\..*$' THEN
-        -- Get the album owner ID
-        SELECT "ownerId" INTO album_owner_id
-        FROM "album"
-        WHERE "id" = lakewood_album_id;
+        -- Get the album owner ID (v3: owner is the album_user row with role='owner')
+        SELECT "userId" INTO album_owner_id
+        FROM "album_user"
+        WHERE "albumId" = lakewood_album_id
+          AND "role" = 'owner';
 
         -- Only proceed if the asset owner matches the album owner
         IF NEW."ownerId" = album_owner_id THEN
@@ -34,10 +38,11 @@ BEGIN
         -- 1. The owner of the album
         -- 2. An editor with access to the album
         IF EXISTS (
-            -- Check if asset owner is the album owner
-            SELECT 1 FROM "album"
-            WHERE "id" = 'c3e845fd-8bbd-4c9d-968f-c6535e73e477'
-            AND "ownerId" = NEW."ownerId"
+            -- Check if asset owner is the album owner (v3: role='owner' in album_user)
+            SELECT 1 FROM "album_user"
+            WHERE "albumId" = 'c3e845fd-8bbd-4c9d-968f-c6535e73e477'
+            AND "role" = 'owner'
+            AND "userId" = NEW."ownerId"
         ) OR EXISTS (
             -- Check if asset owner is an editor of the album
             SELECT 1 FROM "album_user"

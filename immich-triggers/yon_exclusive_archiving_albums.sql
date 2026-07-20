@@ -1,7 +1,10 @@
--- Synced to the LIVE function on 2026-06-21 (Immich v2.7.5 schema).
+-- Synced to the LIVE function on 2026-07-20 (Immich v3.0.3 schema).
 -- NOTE: schema is the modern singular naming: table "album_asset" with columns
 -- "albumId"/"assetId", "asset"."visibility" enum ('archive'), NOT the old
--- "albums_assets_assets"/"albumsId"/"isArchived". Applied manually via psql:
+-- "albums_assets_assets"/"albumsId"/"isArchived".
+-- v3 CHANGE (2026-07-20): "album"."ownerId" was REMOVED in Immich v3. The album owner
+-- is now the "album_user" row with "role" = 'owner'. The owner lookup below reads
+-- album_user, not album.ownerId. Applied manually via psql:
 --   sudo podman exec -i immich-database psql -U postgres -d immich -f <thisfile>
 
 CREATE OR REPLACE FUNCTION yon_exclusive_archiving_albums()
@@ -56,10 +59,11 @@ BEGIN
         FROM "asset"
         WHERE "id" = NEW."assetId";
 
-        -- Get the album owner ID
-        SELECT "ownerId" INTO album_owner_id
-        FROM "album"
-        WHERE "id" = NEW."albumId";
+        -- Get the album owner ID (v3: owner is the album_user row with role='owner')
+        SELECT "userId" INTO album_owner_id
+        FROM "album_user"
+        WHERE "albumId" = NEW."albumId"
+          AND "role" = 'owner';
 
         -- Only proceed if the asset owner and album owner match
         IF asset_owner_id = album_owner_id THEN

@@ -8,7 +8,7 @@ let
   # as /external for use as an external library.
   EXTERNAL_PHOTOS = "/firstpool/family/photos";
   DB_DATA_LOCATION = "/firstpool/family/immich/postgres";
-  IMMICH_VERSION = "v2.7.5";
+  IMMICH_VERSION = "v3.0.3";
   DB_PASSWORD = "postgres";
   DB_USERNAME = "postgres";
   DB_DATABASE_NAME = "immich";

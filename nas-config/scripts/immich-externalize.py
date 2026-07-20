@@ -7,6 +7,12 @@ Written against Immich v2.7.5 (asset.libraryId/isExternal/originalPath,
 checksumAlgorithm=sha1). Refuses to run against any other server version
 unless --skip-version-check.
 
+Schema re-verified against Immich v3.0.3 on 2026-07-20: every table/column this
+script touches (library.id/name, asset.originalPath/checksum/libraryId/deletedAt/
+isExternal/isOffline, asset_file.type/assetId) still exists, so (3,0) is added to
+TESTED_VERSIONS. NOT yet run live against v3 — on the first --execute, spot-check
+that an externalized asset shows isExternal/libraryId set as expected.
+
 ONE-TIME SETUP (before first use)
   1. Mount the destination tree into the immich-server container READ-ONLY,
      e.g. in nas-config immich.nix:  /firstpool/family/photos:/external:ro
@@ -46,7 +52,7 @@ import subprocess
 import sys
 import urllib.request
 
-TESTED_VERSIONS = {(2, 7)}  # (major, minor) of Immich server this was written against
+TESTED_VERSIONS = {(2, 7), (3, 0)}  # (major, minor); v3.0.3 schema re-verified 2026-07-20
 PSQL = ["podman", "exec", "-i", "immich-database", "psql", "-U", "postgres",
         "-d", "immich", "-v", "ON_ERROR_STOP=1", "--no-psqlrc", "-qAt"]
 DEFAULT_MOUNTS = [

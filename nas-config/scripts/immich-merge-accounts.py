@@ -2,9 +2,15 @@
 """Merge one Immich account into another, preserving albums, people (face
 names), memories, tags, favorites, archive state, and descriptions.
 
-Written against Immich v2.7.5. Refuses to run against any other server
-version unless --skip-version-check, and verifies every table/column it
-touches before doing anything.
+Written for Immich v3 (rewritten 2026-07-20, schema-verified on v3.0.3). v3
+REMOVED "album"."ownerId": album ownership now lives in "album_user" as the row
+with role='owner' (the role enum gained 'owner'; a partial-unique index
+album_user_unique_owner enforces exactly one owner per album). Ownership
+transfer therefore promotes dst to owner by renaming src's owner rows in
+album_user, not by updating album.ownerId. This makes the script v3-ONLY — it
+will refuse to run on v2.x (TESTED_VERSIONS below), which is correct since the
+DB migration to v3 is one-way. check_schema() still verifies every table/column
+before doing anything.
 
 WHAT IT DOES (all DB changes in ONE transaction)
   1. Finds duplicate assets: source-account assets whose SHA-1 checksum also
@@ -46,7 +52,7 @@ import subprocess
 import sys
 import urllib.request
 
-TESTED_VERSIONS = {(2, 7)}
+TESTED_VERSIONS = {(3, 0)}  # v3-only: uses the album_user role='owner' model (2026-07-20)
 PSQL = ["podman", "exec", "-i", "immich-database", "psql", "-U", "postgres",
         "-d", "immich", "-v", "ON_ERROR_STOP=1", "--no-psqlrc", "-qAt"]
 UPLOAD_ROOT = "/firstpool/family/immich/photos"   # host path of container /data
@@ -58,9 +64,9 @@ VERSION_URL = "http://localhost:2283/api/server/version"
 REQUIRED_SCHEMA = {
     "asset": ["id", "ownerId", "checksum", "libraryId", "originalPath", "status"],
     "asset_file": ["assetId", "path", "type"],
-    "album": ["id", "ownerId", "albumThumbnailAssetId"],
+    "album": ["id", "albumThumbnailAssetId"],  # v3: no ownerId — owner is in album_user
     "album_asset": ["albumId", "assetId"],
-    "album_user": ["albumId", "userId"],
+    "album_user": ["albumId", "userId", "role"],  # v3: role='owner' identifies the owner
     "memory": ["id", "ownerId"],
     "memory_asset": ["memoriesId", "assetId"],
     "person": ["id", "ownerId"],
@@ -159,7 +165,7 @@ def main():
     counts = {}
     for label, q in [
         ("assets to transfer", f"select count(*) from asset where \"ownerId\"='{src}'"),
-        ("albums to transfer", f"select count(*) from album where \"ownerId\"='{src}'"),
+        ("albums to transfer", f"select count(*) from album_user where \"userId\"='{src}' and role='owner'"),
         ("people to transfer", f"select count(*) from person where \"ownerId\"='{src}'"),
         ("memories to transfer", f"select count(*) from memory where \"ownerId\"='{src}'"),
         ("stacks to transfer", f"select count(*) from stack where \"ownerId\"='{src}'"),
@@ -248,7 +254,16 @@ end $$;
 
 -- transfer ownership
 update asset  set "ownerId" = '{dst}' where "ownerId" = '{src}';
-update album  set "ownerId" = '{dst}' where "ownerId" = '{src}';
+-- albums: v3 has no album.ownerId — ownership is the album_user row with
+-- role='owner'. Promote dst to owner of every album src owns. First drop any
+-- existing dst membership on those albums so renaming src's owner row to dst
+-- doesn't collide with the (albumId,userId) primary key (dst can only be an
+-- editor/viewer here, since src holds the unique owner row).
+delete from album_user au using album_user own
+  where own."userId" = '{src}' and own.role = 'owner'
+    and au."albumId" = own."albumId" and au."userId" = '{dst}';
+update album_user set "userId" = '{dst}'
+  where "userId" = '{src}' and role = 'owner';
 update person set "ownerId" = '{dst}' where "ownerId" = '{src}';
 update memory set "ownerId" = '{dst}' where "ownerId" = '{src}';
 update stack  set "ownerId" = '{dst}' where "ownerId" = '{src}';
@@ -267,10 +282,12 @@ update tag set "parentId" = tagmap.dst from tagmap
 delete from tag where id in (select src from tagmap);
 update tag set "userId" = '{dst}' where "userId" = '{src}';
 
--- shares that would now be self-shares
-delete from album_user au using album al
-  where au."albumId" = al.id
-    and (au."userId" = '{src}' or au."userId" = al."ownerId");
+-- drop src's remaining album shares (editor/viewer rows on albums owned by
+-- others). src's owner rows were already renamed to dst above; the one-owner-
+-- per-album partial unique (album_user_unique_owner) means dst cannot be both
+-- owner and a separate shared member of the same album, so promoting above
+-- already handled every self-share — nothing else to clean up.
+delete from album_user where "userId" = '{src}';
 
 commit;
 """)
