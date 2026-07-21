@@ -351,13 +351,18 @@ long enough to wire up OIDC, or you lock yourself out.
    Pocket ID has no open self-registration, this doesn't reopen anything;
    adding a new person only ever means creating them in Pocket ID.
 6. Bind your own admin account to your Pocket ID identity (the "bind" flow
-   from step 5) and confirm OIDC login works end-to-end for it — do this
-   *before* the next step, or you'll lock yourself out.
-7. Set `services.rustdesk-api.disablePwdLogin = true`, redeploy. Password
-   login is now off entirely; OIDC via Pocket ID is the only way in.
-8. On each RustDesk client you want synced, set **API Server** =
+   from step 5) and confirm OIDC login works end-to-end for it.
+7. On each RustDesk desktop client you want synced, set **API Server** =
    `https://rustdesk.yonathan.org` (in addition to the ID/Relay/Key already
-   configured), then log in via the OIDC option.
+   configured), then log in via **username/password** (the account and
+   password were auto-created when you first logged into the admin console
+   via OIDC in step 6).
+8. (Optional: if you want OIDC-only login to the web admin console and don't
+   need desktop clients to connect via API Server, set
+   `services.rustdesk-api.disablePwdLogin = true` and redeploy. This breaks
+   desktop-client login — leave it false if you want clients to work. With it
+   false, Pocket ID still gates *account creation* via AutoRegister; password
+   is just how desktop clients authenticate once their account exists.)
 
 ## Configure sb-exporter
 
